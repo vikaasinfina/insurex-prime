@@ -11,7 +11,6 @@ import { useAdminAgents } from "@/hooks/use-admin-live-data";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   ArrowUpDown,
-  BarChart3,
   Calendar,
   CheckCircle2,
   ChevronDown,
@@ -48,7 +47,6 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -707,98 +705,6 @@ function AgentDetailDrawer({
   );
 }
 
-// ─── Agent Performance Charts ─────────────────────────────────────────────────
-function AgentPerformanceCharts() {
-  const [metric, setMetric] = useState<"policiesSold" | "premiumGenerated">("policiesSold");
-
-  return (
-    <section className="rounded-xl border border-border/80 bg-background/90 p-3.5 shadow-xs sm:rounded-2xl sm:p-5 backdrop-blur-sm">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/60 pb-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <BarChart3 className="size-4.5 text-primary" />
-            <h2 className="font-display text-lg font-bold tracking-tight text-foreground">
-              Agent Performance Overview
-            </h2>
-          </div>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Comparative production and premium generation by certified field agent
-          </p>
-        </div>
-        <div className="flex items-center rounded-xl border border-border bg-surface/60 p-1 w-fit">
-          {[
-            { id: "policiesSold", label: "Policies Sold" },
-            { id: "premiumGenerated", label: "Premium" },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setMetric(tab.id as typeof metric)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
-                metric === tab.id
-                  ? "bg-background text-foreground shadow-xs"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-5 h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={agentPoliciesChartData}
-            margin={{ top: 5, right: 5, left: metric === "premiumGenerated" ? 30 : -10, bottom: 0 }}
-          >
-            <CartesianGrid
-              strokeDasharray="3 3"
-              vertical={false}
-              stroke="currentColor"
-              opacity={0.08}
-            />
-            <XAxis
-              dataKey="name"
-              tickLine={false}
-              axisLine={false}
-              tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
-            />
-            <YAxis
-              tickLine={false}
-              axisLine={false}
-              tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
-              {...(metric === "premiumGenerated"
-                ? { tickFormatter: (val: number) => `₹${(val / 100000).toFixed(1)}L` }
-                : {})}
-            />
-            <Tooltip
-              content={({ active, payload, label }) => {
-                if (active && payload && payload.length && payload[0]) {
-                  const item = payload[0].payload as (typeof agentPoliciesChartData)[0];
-                  return (
-                    <div className="rounded-xl border border-border bg-background p-3 shadow-lg text-xs">
-                      <p className="font-bold text-foreground">{item.fullName}</p>
-                      <p className="text-muted-foreground">{label}</p>
-                      <div className="mt-1 font-semibold text-primary">
-                        {metric === "policiesSold"
-                          ? `${item.policiesSold} Policies`
-                          : formatINR(item.premiumGenerated)}
-                      </div>
-                    </div>
-                  );
-                }
-                return null;
-              }}
-            />
-            <Bar dataKey={metric} fill="var(--primary)" radius={[6, 6, 0, 0]} maxBarSize={50} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </section>
-  );
-}
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
 function AdminAgentsPage() {
   const navigate = useNavigate();
@@ -841,7 +747,8 @@ function AdminAgentsPage() {
           a.name.toLowerCase().includes(q) ||
           a.code.toLowerCase().includes(q) ||
           a.email.toLowerCase().includes(q) ||
-          a.phone.includes(q),
+          a.phone.includes(q) ||
+          a.status.toLowerCase() === q,
       );
     }
 
@@ -1055,7 +962,7 @@ function AdminAgentsPage() {
       <div className="app-shell-pad flex flex-col min-h-screen">
         <AdminHeader onToggleSidebar={() => setSidebarOpen(true)} />
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-[1600px] w-full mx-auto">
           {/* ── Page Header ──────────────────────────────────────────────── */}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -1071,28 +978,6 @@ function AdminAgentsPage() {
             </div>
 
             <div className="flex items-center gap-2.5">
-              {/* Search */}
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
-                <Input
-                  type="search"
-                  placeholder="Search agents..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="h-9 w-44 rounded-xl bg-background pl-9 text-xs sm:w-56 focus-visible:ring-1 focus-visible:ring-primary"
-                />
-                {search && (
-                  <button
-                    type="button"
-                    onClick={() => setSearch("")}
-                    className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground cursor-pointer"
-                    aria-label="Clear search"
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                )}
-              </div>
-
               {/* Add Agent */}
               <Button
                 type="button"
@@ -1193,7 +1078,7 @@ function AdminAgentsPage() {
           {/* ── Agent Table ──────────────────────────────────────────────── */}
           <section className="rounded-2xl border border-border/80 bg-background/90 shadow-xs backdrop-blur-sm overflow-hidden">
             {/* Table header row */}
-            <div className="flex items-center justify-between border-b border-border/80 px-5 py-4">
+            <div className="flex flex-col gap-3 border-b border-border/80 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="font-display text-base font-bold text-foreground">
                   Agents Directory
@@ -1202,11 +1087,35 @@ function AdminAgentsPage() {
                   {filteredAgents.length} of {agents.length} agents shown
                 </p>
               </div>
+              {/* Search */}
+              <div className="relative w-full sm:w-96">
+                <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Search by name, agent ID, phone, email or status…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="h-9 w-full rounded-xl bg-background pl-9 text-xs focus-visible:ring-1 focus-visible:ring-primary"
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground cursor-pointer"
+                    aria-label="Clear search"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Scrollable Table */}
             <div className="overflow-x-auto">
-              <table data-cards className="w-full border-collapse text-left text-xs min-w-[1050px]">
+              <table
+                data-cards
+                className="w-full border-collapse text-left text-xs min-w-[1050px] xl:min-w-0"
+              >
                 <thead>
                   <tr className="border-b border-border/70 bg-surface/40 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                     <th className="py-3 pl-5 pr-4">Agent</th>
@@ -1420,9 +1329,6 @@ function AdminAgentsPage() {
               </table>
             </div>
           </section>
-
-          {/* ── Agent Performance Charts ─────────────────────────────────── */}
-          <AgentPerformanceCharts />
         </main>
         <AdminFooter />
       </div>

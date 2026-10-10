@@ -41,6 +41,15 @@ export const soldPolicySchema = z
     premium: z.number(),
     amountPaid: z.number().describe("Sum of PAID receipts"),
     issueDate: z.string().describe("YYYY-MM-DD"),
+    isRenewal: z
+      .boolean()
+      .describe("This sale renews an earlier sale (otherwise it is a new sale)"),
+    isRenewed: z
+      .boolean()
+      .describe("A later sale renews this one, so it no longer counts as expired"),
+    inceptionDate: z
+      .string()
+      .describe("YYYY-MM-DD; when the policy was first issued. Equals issueDate for a new policy"),
     expiryDate: z.string().describe("YYYY-MM-DD"),
     paymentStatus: z.enum(PaymentStatus),
     policyStatus: z.enum(SoldPolicyStatus),
@@ -74,6 +83,12 @@ export const listSoldPoliciesQuerySchema = paginationQuerySchema
     policyStatus: z.enum(SoldPolicyStatus).optional(),
     paymentStatus: z.enum(PaymentStatus).optional(),
     insuranceType: z.enum(InsuranceType).optional(),
+    expiry: z
+      .enum(["ACTIVE", "EXPIRING", "EXPIRED"])
+      .optional()
+      .describe(
+        "ACTIVE: in force, not yet expired. EXPIRING: expires within 30 days. EXPIRED: past expiry, not cancelled.",
+      ),
     agentId: z.uuid().optional().describe("SUPER_ADMIN only; ignored for agents"),
     customerId: z.uuid().optional(),
     policyId: z.uuid().optional(),
@@ -84,6 +99,20 @@ export const createSoldPolicyBodySchema = z.object({
   policyId: z.uuid(),
   customerId: z.uuid(),
   issueDate: z.iso.date().optional().describe("YYYY-MM-DD; defaults to today"),
+  inceptionDate: z.iso
+    .date()
+    .optional()
+    .describe("YYYY-MM-DD; when the policy was first issued. Omit for a new policy"),
+  renewsSoldPolicyId: z
+    .uuid()
+    .optional()
+    .describe(
+      "The earlier sale this renews. When omitted, the customer's previous sale of the same policy is used",
+    ),
+  renewal: z
+    .boolean()
+    .optional()
+    .describe("True when this renews an earlier policy: lets an agent adjust the premium"),
   agentId: z
     .uuid()
     .optional()
@@ -145,7 +174,9 @@ export const updateSoldPolicyBodySchema = z
     policyStatus: z.enum(SoldPolicyStatus),
     paymentStatus: z.enum(PaymentStatus),
     issueDate: z.iso.date(),
+    inceptionDate: z.iso.date().nullable(),
     expiryDate: z.iso.date(),
+    insurerPolicyNumber: z.string().trim().max(60).nullable(),
     premium: z.number().positive().max(1e10),
   })
   .partial()

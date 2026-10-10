@@ -89,6 +89,10 @@ export interface CustomerPolicySummary {
   expiryDate: string;
   paymentStatus: PaymentStatus;
   policyStatus: SoldPolicyStatus;
+  /** This sale renews an earlier one (otherwise it is new). */
+  isRenewal: boolean;
+  /** A later sale renews this one. */
+  isRenewed: boolean;
   agent: AgentRef;
 }
 
@@ -162,6 +166,12 @@ export interface ApiSoldPolicy {
   premium: number;
   amountPaid: number;
   issueDate: string;
+  /** When the policy was first issued; equals issueDate for a new policy. */
+  inceptionDate: string;
+  /** This sale renews an earlier one (otherwise it is new). */
+  isRenewal: boolean;
+  /** A later sale renews this one, so it no longer counts as expired. */
+  isRenewed: boolean;
   expiryDate: string;
   paymentStatus: PaymentStatus;
   policyStatus: SoldPolicyStatus;
@@ -290,6 +300,7 @@ export interface AgentDashboard {
     premiumCollected: number;
     pendingPayments: number;
     expiringSoon: number;
+    expiredPolicies: number;
   };
   salesTrend: SalesSeries;
   policyDistribution: PolicyDistributionRow[];

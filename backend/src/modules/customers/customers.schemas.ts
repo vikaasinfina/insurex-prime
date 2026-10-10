@@ -53,6 +53,8 @@ export const customerDetailSchema = customerSchema
         expiryDate: z.string(),
         paymentStatus: z.enum(PaymentStatus),
         policyStatus: z.enum(SoldPolicyStatus),
+        isRenewal: z.boolean(),
+        isRenewed: z.boolean(),
         agent: agentRefSchema,
       }),
     ),

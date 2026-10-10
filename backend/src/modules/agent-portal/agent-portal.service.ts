@@ -7,10 +7,15 @@ import { parseDateOnly, toDateOnly, toNumber } from "../../utils/format.js";
 import { changedFields, recordAudit } from "../audit-logs/audit-logs.service.js";
 import { toAgentDto } from "../agents/agents.schemas.js";
 import { getPolicyDistribution, getSalesOverTime } from "../reports/analytics.service.js";
-import { soldPolicyInclude, toSoldPolicyDto } from "../sold-policies/sold-policies.service.js";
+import {
+  EXPIRING_WINDOW_DAYS,
+  expiryWhere,
+  notRenewed,
+  soldPolicyInclude,
+  toSoldPolicyDto,
+} from "../sold-policies/sold-policies.service.js";
 import type { DashboardRange, updateAgentProfileBodySchema } from "./agent-portal.schemas.js";
 
-export const EXPIRING_WINDOW_DAYS = 30;
 const DAY_MS = 86_400_000;
 
 const todayUtc = () => parseDateOnly(new Date().toISOString());
@@ -95,6 +100,7 @@ export async function getAgentDashboard(
     policyStatus: { not: "CANCELLED" },
   };
   const expiringWhere: Prisma.SoldPolicyWhereInput = {
+    ...notRenewed,
     agentId,
     policyStatus: { in: ["ACTIVE", "PENDING"] },
     expiryDate: { gte: today, lte: expiringUntil },
@@ -109,6 +115,7 @@ export async function getAgentDashboard(
     collected,
     pendingPayments,
     expiringSoon,
+    expiredPolicies,
     salesTrend,
     policyDistribution,
     premiumTrend,
@@ -128,6 +135,7 @@ export async function getAgentDashboard(
     }),
     db.soldPolicy.count({ where: { ...notCancelled, paymentStatus: { in: ["PENDING", "DUE"] } } }),
     db.soldPolicy.count({ where: expiringWhere }),
+    db.soldPolicy.count({ where: { agentId, ...expiryWhere("EXPIRED", today) } }),
     getSalesOverTime(
       db,
       { tenantId, agentId },
@@ -175,6 +183,7 @@ export async function getAgentDashboard(
       premiumCollected: collected._sum.amount ? toNumber(collected._sum.amount) : 0,
       pendingPayments,
       expiringSoon,
+      expiredPolicies,
     },
     salesTrend,
     policyDistribution,

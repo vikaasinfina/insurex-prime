@@ -66,6 +66,7 @@ export function toRecentSale(sale: ApiSoldPolicy): RecentPolicySale {
     premium: sale.premium,
     issueDate: formatDisplayDate(sale.issueDate),
     status: policyStatusLabel(sale.policyStatus),
+    isRenewal: sale.isRenewal,
   };
 }
 
@@ -122,6 +123,7 @@ export function toCustomer(customer: ApiCustomer, sales: ApiSoldPolicy[]): Custo
     agentName: sale.agent.fullName,
     agentCode: sale.agent.agentCode,
     status: policyStatusLabel(sale.policyStatus),
+    isRenewal: sale.isRenewal,
   }));
   return {
     id: customer.customerCode,

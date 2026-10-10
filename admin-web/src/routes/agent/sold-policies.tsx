@@ -1,10 +1,24 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Eye, FilePlus2, RefreshCw, RotateCcw, Search, ShoppingBag } from "lucide-react";
+import {
+  Eye,
+  FilePlus2,
+  Pencil,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  ShoppingBag,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { SoldPolicyDialog } from "@/components/agent/SoldPolicyDialog";
 import {
+  DeleteSoldPolicyDialog,
+  EditSoldPolicyDialog,
+} from "@/components/agent/SoldPolicyEditDialogs";
+import {
   CodeChip,
+  SaleStatusBadge,
   EmptyState,
   ErrorState,
   InsuranceTypeBadge,
@@ -16,13 +30,16 @@ import {
   tdClass,
   thClass,
 } from "@/components/agent/agent-ui";
+import { SaleTypeBadge } from "@/components/SaleTypeBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { retryUnlessClientError, soldPoliciesApi } from "@/lib/api";
-import type { InsuranceType } from "@/lib/api/types";
+import type { ApiSoldPolicy, InsuranceType } from "@/lib/api/types";
 import { agentKeys } from "@/lib/agent-queries";
+import { expiryStatus } from "@/lib/expiry-status";
 import { formatDate, formatINR } from "@/lib/format";
+import { policyAge } from "@/lib/policy-age";
 
 interface SoldSearch {
   view?: string | undefined;
@@ -43,6 +60,25 @@ export const Route = createFileRoute("/agent/sold-policies")({
 const PAGE_SIZE = 10;
 type SortKey = "issueDate" | "expiryDate" | "premium" | "createdAt";
 
+const ageTone = {
+  new: "bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/20",
+  one: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
+  three: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20",
+  ten: "bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/20",
+} as const;
+
+function PolicyAgeBadge({ inceptionDate }: { inceptionDate: string }) {
+  const age = policyAge(inceptionDate);
+  return (
+    <span
+      title={`First issued ${formatDate(inceptionDate)}`}
+      className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-bold ${ageTone[age.tone]}`}
+    >
+      {age.label}
+    </span>
+  );
+}
+
 function SoldPoliciesPage() {
   const params = Route.useSearch();
   const navigate = useNavigate({ from: "/agent/sold-policies" });
@@ -53,6 +89,8 @@ function SoldPoliciesPage() {
   const [sort, setSort] = useState<`${SortKey}:${"asc" | "desc"}`>("issueDate:desc");
   const [page, setPage] = useState(1);
   const debouncedSearch = useDebouncedValue(search.trim());
+  const [editSale, setEditSale] = useState<ApiSoldPolicy | null>(null);
+  const [deleteSale, setDeleteSale] = useState<ApiSoldPolicy | null>(null);
 
   const rangeInvalid = Boolean(from && to && from > to);
   useEffect(() => setPage(1), [debouncedSearch, insuranceType, from, to, sort]);
@@ -208,8 +246,11 @@ function SoldPoliciesPage() {
                     "Policy",
                     "Insurance Type",
                     "Premium",
+                    "Sale Type",
+                    "Policy Age",
                     "Issue Date",
                     "Expiry Date",
+                    "Renewal Status",
                     "Actions",
                   ].map((heading) => (
                     <th
@@ -222,46 +263,81 @@ function SoldPoliciesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50 font-medium">
-                {rows.map((sale) => (
-                  <tr key={sale.id} className="transition-colors hover:bg-muted/40">
-                    <td className={tdClass}>
-                      <CodeChip>{sale.policyNumber}</CodeChip>
-                    </td>
-                    <td className={`${tdClass} font-bold text-foreground`}>
-                      <p className="whitespace-nowrap">{sale.customer.fullName}</p>
-                      <p className="font-mono text-[11px] font-normal text-muted-foreground">
-                        {sale.customer.customerCode}
-                      </p>
-                    </td>
-                    <td className={tdClass}>{sale.policy.policyName}</td>
-                    <td className={tdClass}>
-                      <InsuranceTypeBadge type={sale.policy.insuranceType} />
-                    </td>
-                    <td
-                      className={`${tdClass} whitespace-nowrap text-right font-display font-extrabold`}
+                {rows.map((sale) => {
+                  const expiry = expiryStatus(sale.expiryDate, sale.isRenewed);
+                  return (
+                    <tr
+                      key={sale.id}
+                      className={`transition-colors hover:bg-muted/40 ${expiry.row}`}
                     >
-                      {formatINR(sale.premium)}
-                    </td>
-                    <td className={`${tdClass} whitespace-nowrap text-muted-foreground`}>
-                      {formatDate(sale.issueDate)}
-                    </td>
-                    <td className={`${tdClass} whitespace-nowrap text-muted-foreground`}>
-                      {formatDate(sale.expiryDate)}
-                    </td>
-                    <td className={`${tdClass} text-right`}>
-                      <div className="flex justify-end gap-1.5">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 rounded-lg px-2 text-xs"
-                          onClick={() => setView(sale.id)}
+                      <td className={tdClass}>
+                        <CodeChip>{sale.policyNumber}</CodeChip>
+                      </td>
+                      <td className={`${tdClass} font-bold text-foreground`}>
+                        <p className="whitespace-nowrap">{sale.customer.fullName}</p>
+                        <p className="font-mono text-[11px] font-normal text-muted-foreground">
+                          {sale.customer.customerCode}
+                        </p>
+                      </td>
+                      <td className={tdClass}>{sale.policy.policyName}</td>
+                      <td className={tdClass}>
+                        <InsuranceTypeBadge type={sale.policy.insuranceType} />
+                      </td>
+                      <td
+                        className={`${tdClass} whitespace-nowrap text-right font-display font-extrabold`}
+                      >
+                        {formatINR(sale.premium)}
+                      </td>
+                      <td className={tdClass}>
+                        <SaleTypeBadge renewal={sale.isRenewal} />
+                      </td>
+                      <td className={tdClass}>
+                        <PolicyAgeBadge inceptionDate={sale.inceptionDate} />
+                      </td>
+                      <td className={`${tdClass} whitespace-nowrap text-muted-foreground`}>
+                        {formatDate(sale.issueDate)}
+                      </td>
+                      <td className={`${tdClass} whitespace-nowrap text-muted-foreground`}>
+                        {formatDate(sale.expiryDate)}
+                      </td>
+                      <td className={tdClass}>
+                        <span
+                          className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-bold ${expiry.badge}`}
                         >
-                          <Eye /> View
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          {expiry.label}
+                        </span>
+                      </td>
+                      <td className={`${tdClass} text-right`}>
+                        <div className="flex justify-end gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 rounded-lg px-2 text-xs"
+                            onClick={() => setView(sale.id)}
+                          >
+                            <Eye /> View
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 rounded-lg px-2 text-xs"
+                            onClick={() => setEditSale(sale)}
+                          >
+                            <Pencil /> Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 rounded-lg px-2 text-xs text-destructive hover:text-destructive"
+                            onClick={() => setDeleteSale(sale)}
+                          >
+                            <Trash2 /> Delete
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </TableScroller>
           </div>
@@ -270,6 +346,8 @@ function SoldPoliciesPage() {
       </SectionCard>
 
       <SoldPolicyDialog soldPolicyId={params.view ?? null} onClose={() => setView(undefined)} />
+      <EditSoldPolicyDialog sale={editSale} onClose={() => setEditSale(null)} />
+      <DeleteSoldPolicyDialog sale={deleteSale} onClose={() => setDeleteSale(null)} />
     </>
   );
 }

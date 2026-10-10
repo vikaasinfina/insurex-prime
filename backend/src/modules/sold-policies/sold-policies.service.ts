@@ -19,7 +19,14 @@ import type {
 } from "./sold-policies.schemas.js";
 
 export const soldPolicyInclude = {
-  policy: { select: { id: true, policyCode: true, policyName: true, insuranceType: true } },
+  policy: {
+    select: {
+      id: true,
+      policyCode: true,
+      policyName: true,
+      insuranceType: true,
+    },
+  },
   customer: { select: { id: true, customerCode: true, fullName: true } },
   agent: { select: { id: true, agentCode: true, fullName: true } },
   receipts: {
@@ -33,9 +40,12 @@ export const soldPolicyInclude = {
     },
     orderBy: { issuedAt: "asc" },
   },
+  renewals: { where: { policyStatus: { not: "CANCELLED" } }, select: { id: true }, take: 1 },
 } as const satisfies Prisma.SoldPolicyInclude;
 
-type SoldPolicyRecord = Prisma.SoldPolicyGetPayload<{ include: typeof soldPolicyInclude }>;
+type SoldPolicyRecord = Prisma.SoldPolicyGetPayload<{
+  include: typeof soldPolicyInclude;
+}>;
 
 export const toSoldPolicyDto = (sold: SoldPolicyRecord) => ({
   id: sold.id,
@@ -49,6 +59,9 @@ export const toSoldPolicyDto = (sold: SoldPolicyRecord) => ({
     .filter((receipt) => receipt.paymentStatus === "PAID")
     .reduce((total, receipt) => total + toNumber(receipt.amount), 0),
   issueDate: toDateOnly(sold.issueDate),
+  isRenewal: sold.renewedFromId !== null,
+  isRenewed: sold.renewals.length > 0,
+  inceptionDate: toDateOnly(sold.inceptionDate ?? sold.issueDate),
   expiryDate: toDateOnly(sold.expiryDate),
   paymentStatus: sold.paymentStatus,
   policyStatus: sold.policyStatus,
@@ -81,6 +94,7 @@ export async function listSoldPolicies(
       query.customerId ? { customerId: query.customerId } : {},
       query.policyId ? { policyId: query.policyId } : {},
       query.policyStatus ? { policyStatus: query.policyStatus } : {},
+      query.expiry ? expiryWhere(query.expiry, parseDateOnly(new Date().toISOString())) : {},
       query.paymentStatus ? { paymentStatus: query.paymentStatus } : {},
       query.insuranceType ? { policy: { insuranceType: query.insuranceType } } : {},
       toDateFilter(query) ? { issueDate: toDateFilter(query) } : {},
@@ -106,7 +120,10 @@ export async function listSoldPolicies(
       ...toSkipTake(query),
     }),
   ]);
-  return { items: rows.map(toSoldPolicyDto), meta: buildMeta(query.page, query.limit, total) };
+  return {
+    items: rows.map(toSoldPolicyDto),
+    meta: buildMeta(query.page, query.limit, total),
+  };
 }
 
 export async function getSoldPolicy(db: Database, auth: AuthContext, id: string) {
@@ -127,13 +144,50 @@ export function computeExpiryDate(issueDate: Date, durationMonths: number): Date
 }
 
 /** How far an AGENT may back- or forward-date a sale's issue date. */
-export const AGENT_ISSUE_DATE_WINDOW = { pastDays: 30, futureDays: 90 } as const;
+export const AGENT_ISSUE_DATE_WINDOW = {
+  pastDays: 30,
+  futureDays: 90,
+} as const;
 
 const DAY_MS = 86_400_000;
 
+/** How far ahead a policy counts as "expiring soon". */
+export const EXPIRING_WINDOW_DAYS = 30;
+
+/** A sale that a later, non-cancelled sale renews no longer needs attention. */
+export const notRenewed: Prisma.SoldPolicyWhereInput = {
+  renewals: { none: { policyStatus: { not: "CANCELLED" } } },
+};
+
+/** Where-clause for the list's `expiry` filter (and the matching dashboard counts). */
+export function expiryWhere(
+  expiry: "ACTIVE" | "EXPIRING" | "EXPIRED",
+  today: Date,
+): Prisma.SoldPolicyWhereInput {
+  switch (expiry) {
+    case "ACTIVE":
+      return { policyStatus: "ACTIVE", expiryDate: { gte: today } };
+    case "EXPIRING":
+      return {
+        ...notRenewed,
+        policyStatus: { in: ["ACTIVE", "PENDING"] },
+        expiryDate: { gte: today, lte: new Date(today.getTime() + EXPIRING_WINDOW_DAYS * DAY_MS) },
+      };
+    case "EXPIRED":
+      return { ...notRenewed, policyStatus: { not: "CANCELLED" }, expiryDate: { lt: today } };
+  }
+}
+
 type SaleInput = Pick<
   z.infer<typeof createSoldPolicyBodySchema>,
-  "policyId" | "customerId" | "issueDate" | "agentId" | "premium" | "expiryDate"
+  | "policyId"
+  | "customerId"
+  | "issueDate"
+  | "inceptionDate"
+  | "agentId"
+  | "premium"
+  | "expiryDate"
+  | "renewal"
 >;
 
 /**
@@ -148,7 +202,9 @@ export async function resolveSale(db: Database, auth: AuthContext, body: SaleInp
   if (!policy || (!admin && policy.status !== "ACTIVE")) throw notFound("Policy");
   if (policy.status !== "ACTIVE") throw conflict("INACTIVE policies cannot be sold.");
 
-  const customer = await db.customer.findUnique({ where: { id: body.customerId } });
+  const customer = await db.customer.findUnique({
+    where: { id: body.customerId },
+  });
   // Agents may only sell to their own customers; hide others' customers entirely.
   if (!customer || (!admin && customer.assignedAgentId !== auth.agentId)) {
     throw notFound("Customer");
@@ -166,7 +222,10 @@ export async function resolveSale(db: Database, auth: AuthContext, body: SaleInp
     if (customer.assignedAgentId && customer.assignedAgentId !== requested) {
       throw badRequest("The customer is assigned to a different agent.");
     }
-    const agent = await db.agent.findUnique({ where: { id: requested }, select: { status: true } });
+    const agent = await db.agent.findUnique({
+      where: { id: requested },
+      select: { status: true },
+    });
     if (!agent) throw badRequest("agentId does not refer to an existing agent.");
     if (agent.status !== "ACTIVE")
       throw badRequest("Sales can only be recorded for ACTIVE agents.");
@@ -175,8 +234,9 @@ export async function resolveSale(db: Database, auth: AuthContext, body: SaleInp
     // The authenticate hook has already checked that this agent is ACTIVE.
     agentId = requireAgentId(auth);
   }
-  // Agents may only price a sale when the catalog has no price (quoted on the insurer's portal).
-  if (!admin && body.premium !== undefined && policy.premium !== null) {
+  // Agents may only price a sale when the catalog has no price (quoted on the insurer's portal),
+  // or when renewing, where the premium often moves.
+  if (!admin && !body.renewal && body.premium !== undefined && policy.premium !== null) {
     throw forbidden("Agents cannot override the catalog premium.");
   }
   if (!admin && body.expiryDate !== undefined && policy.durationMonths !== null) {
@@ -210,7 +270,21 @@ export async function resolveSale(db: Database, auth: AuthContext, body: SaleInp
   }
   if (expiryDate <= issueDate) throw badRequest("expiryDate must be after the issue date.");
 
-  return { policy, customer, agentId, premium, issueDate, expiryDate };
+  // Only a renewal carries an earlier first-issue date; a new policy leaves it empty.
+  const inceptionDate = body.inceptionDate ? parseDateOnly(body.inceptionDate) : null;
+  if (inceptionDate && (Number.isNaN(inceptionDate.getTime()) || inceptionDate > issueDate)) {
+    throw badRequest("inceptionDate cannot be after the issue date.");
+  }
+
+  return {
+    policy,
+    customer,
+    agentId,
+    premium,
+    issueDate,
+    inceptionDate,
+    expiryDate,
+  };
 }
 
 /** Server-side preview of a sale (premium, expiry). Records nothing. */
@@ -252,11 +326,29 @@ export async function createSoldPolicy(
   if (auth.role === "AGENT" && !settings["policy.allowAgentSales"]) {
     throw forbidden("Recording new policy sales is currently disabled for agents.");
   }
-  const { policy, customer, agentId, premium, issueDate, expiryDate } = await resolveSale(
-    db,
-    auth,
-    body,
-  );
+  const { policy, customer, agentId, premium, issueDate, inceptionDate, expiryDate } =
+    await resolveSale(db, auth, body);
+  // Link this sale to the one it renews: the one named by the agent, else the customer's latest
+  // earlier sale of the same policy.
+  const renewedFrom = body.renewsSoldPolicyId
+    ? await db.soldPolicy.findFirst({
+        where: { id: body.renewsSoldPolicyId, customerId: customer.id, ...soldPolicyScope(auth) },
+        select: { id: true },
+      })
+    : await db.soldPolicy.findFirst({
+        where: {
+          customerId: customer.id,
+          policyId: policy.id,
+          policyStatus: { not: "CANCELLED" },
+          issueDate: { lt: issueDate },
+          ...notRenewed,
+        },
+        orderBy: { issueDate: "desc" },
+        select: { id: true },
+      });
+  if (body.renewsSoldPolicyId && !renewedFrom) {
+    throw badRequest("renewsSoldPolicyId is not one of this customer's policies.");
+  }
   const paidAtSale = Boolean(body.paymentMethod);
   const year = issueDate.getUTCFullYear();
   const receiptYear = new Date().getUTCFullYear();
@@ -275,7 +367,9 @@ export async function createSoldPolicy(
             agentId,
             premium,
             issueDate,
+            inceptionDate,
             expiryDate,
+            ...(renewedFrom ? { renewedFromId: renewedFrom.id } : {}),
             // A sale is in force straight away; only the payment status depends on collection.
             policyStatus: "ACTIVE",
             paymentStatus: paidAtSale ? "PAID" : settings["policy.defaultPaymentStatus"],
@@ -316,18 +410,32 @@ export async function createSoldPolicy(
   return toSoldPolicyDetailDto(sold);
 }
 
+/** Admins may edit any sale; an agent only their own, and never its payment or policy status. */
 export async function updateSoldPolicy(
   db: Database,
+  auth: AuthContext,
   request: FastifyRequest,
   id: string,
   body: z.infer<typeof updateSoldPolicyBodySchema>,
 ) {
-  const existing = await db.soldPolicy.findUnique({ where: { id } });
+  const existing = await db.soldPolicy.findFirst({ where: { id, ...soldPolicyScope(auth) } });
   if (!existing) throw notFound("Sold policy");
+  if (!isAdmin(auth) && (body.policyStatus || body.paymentStatus)) {
+    throw forbidden("Agents cannot change a sale's payment or policy status.");
+  }
 
   const issueDate = body.issueDate ? parseDateOnly(body.issueDate) : existing.issueDate;
   const expiryDate = body.expiryDate ? parseDateOnly(body.expiryDate) : existing.expiryDate;
   if (expiryDate <= issueDate) throw badRequest("expiryDate must be after issueDate.");
+  const inceptionDate =
+    body.inceptionDate === undefined
+      ? undefined
+      : body.inceptionDate
+        ? parseDateOnly(body.inceptionDate)
+        : null;
+  if (inceptionDate && inceptionDate > issueDate) {
+    throw badRequest("inceptionDate cannot be after the issue date.");
+  }
 
   const sold = await db.$transaction(async (tx) => {
     const updated = await tx.soldPolicy.update({
@@ -337,6 +445,10 @@ export async function updateSoldPolicy(
         ...(body.paymentStatus ? { paymentStatus: body.paymentStatus } : {}),
         ...(body.premium !== undefined ? { premium: body.premium } : {}),
         issueDate,
+        ...(inceptionDate !== undefined ? { inceptionDate } : {}),
+        ...(body.insurerPolicyNumber !== undefined
+          ? { insurerPolicyNumber: body.insurerPolicyNumber || null }
+          : {}),
         expiryDate,
       },
       include: soldPolicyInclude,
@@ -350,4 +462,25 @@ export async function updateSoldPolicy(
     return updated;
   });
   return toSoldPolicyDetailDto(sold);
+}
+
+/** Removes a sale and its receipts. Admins can delete any sale; an agent only their own. */
+export async function deleteSoldPolicy(
+  db: Database,
+  auth: AuthContext,
+  request: FastifyRequest,
+  id: string,
+) {
+  const existing = await db.soldPolicy.findFirst({ where: { id, ...soldPolicyScope(auth) } });
+  if (!existing) throw notFound("Sold policy");
+  await db.$transaction(async (tx) => {
+    const receipts = await tx.receipt.deleteMany({ where: { soldPolicyId: id } });
+    await tx.soldPolicy.delete({ where: { id } });
+    await recordAudit(tx, request, {
+      action: "soldPolicy.delete",
+      entity: "SoldPolicy",
+      entityId: id,
+      metadata: { policyNumber: existing.policyNumber, receiptsRemoved: receipts.count },
+    });
+  });
 }

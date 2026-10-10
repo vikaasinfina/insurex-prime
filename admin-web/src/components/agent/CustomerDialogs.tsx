@@ -1,3 +1,4 @@
+import { SaleTypeBadge } from "@/components/SaleTypeBadge";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { FilePlus2, Loader2, Pencil, ShieldAlert, UserRound } from "lucide-react";
@@ -34,7 +35,7 @@ import {
   InsuranceTypeBadge,
   NativeSelect,
   PaymentStatusBadge,
-  PolicyStatusBadge,
+  SaleStatusBadge,
 } from "./agent-ui";
 
 interface FormState {
@@ -425,10 +426,15 @@ export function CustomerDetailDialog({
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                           <InsuranceTypeBadge type={policy.insuranceType} />
+                          <SaleTypeBadge renewal={policy.isRenewal} />
                           <span className="font-display font-extrabold">
                             {formatINR(policy.premium)}
                           </span>
-                          <PolicyStatusBadge status={policy.policyStatus} />
+                          <SaleStatusBadge
+                            status={policy.policyStatus}
+                            expiryDate={policy.expiryDate}
+                            renewed={policy.isRenewed}
+                          />
                           <PaymentStatusBadge status={policy.paymentStatus} />
                         </div>
                       </button>

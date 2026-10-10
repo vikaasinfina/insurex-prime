@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { expiryStatus } from "@/lib/expiry-status";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, type PaginationMeta } from "@/lib/api";
@@ -222,6 +223,29 @@ const customerTone: Record<CustomerStatus, Tone> = {
 export const PolicyStatusBadge = ({ status }: { status: SoldPolicyStatus }) => (
   <StatusPill tone={policyTone[status]} label={policyStatusLabel[status]} />
 );
+/**
+ * Status of a sale as the agent cares about it: whether it is still in force or due for renewal.
+ * Cancelled and pending sales keep their own status; the rest follow the expiry date.
+ */
+export function SaleStatusBadge({
+  status,
+  expiryDate,
+  renewed = false,
+}: {
+  status: SoldPolicyStatus;
+  expiryDate: string;
+  renewed?: boolean;
+}) {
+  if (status === "CANCELLED" || status === "PENDING") return <PolicyStatusBadge status={status} />;
+  const expiry = expiryStatus(expiryDate, renewed);
+  return (
+    <span
+      className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-bold ${expiry.badge}`}
+    >
+      {expiry.label}
+    </span>
+  );
+}
 export const PaymentStatusBadge = ({ status }: { status: PaymentStatus }) => (
   <StatusPill tone={paymentTone[status]} label={paymentStatusLabel[status]} />
 );

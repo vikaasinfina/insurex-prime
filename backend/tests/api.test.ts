@@ -377,6 +377,7 @@ describe.skipIf(!hasTestDatabase)("InsuroX API (PostgreSQL integration)", () => 
         premiumCollected: 0,
         pendingPayments: 0,
         expiringSoon: 0,
+        expiredPolicies: 0,
       });
 
       const mine = await call("POST", "/customers", a, { fullName: "Mine", phone: "9111111111" });
@@ -422,6 +423,7 @@ describe.skipIf(!hasTestDatabase)("InsuroX API (PostgreSQL integration)", () => 
         premiumCollected: 20000,
         pendingPayments: 1,
         expiringSoon: 1,
+        expiredPolicies: 0,
       });
       expect(data.salesTrend.interval).toBe("day");
       expect(data.salesTrend.points).toHaveLength(7);

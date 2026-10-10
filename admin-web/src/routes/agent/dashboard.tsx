@@ -1,12 +1,16 @@
+import { expiryStatus } from "@/lib/expiry-status";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
+  AlertTriangle,
   ArrowRight,
   CalendarClock,
   CheckCircle2,
   Eye,
   FilePlus2,
   IndianRupee,
+  RotateCcw,
+  Search,
   Shield,
   ShieldCheck,
   ShoppingBag,
@@ -15,7 +19,7 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   PolicyDistributionChart,
   SalesOverviewChart,
@@ -28,15 +32,19 @@ import {
   EmptyState,
   ErrorState,
   InsuranceTypeBadge,
-  PolicyStatusBadge,
+  NativeSelect,
+  SaleStatusBadge,
   SectionCard,
   TableScroller,
   tdClass,
   thClass,
 } from "@/components/agent/agent-ui";
+import { SaleTypeBadge } from "@/components/SaleTypeBadge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { Skeleton } from "@/components/ui/skeleton";
-import { agentApi, retryUnlessClientError, type AgentDashboard } from "@/lib/api";
+import { agentApi, retryUnlessClientError, soldPoliciesApi, type AgentDashboard } from "@/lib/api";
 import type { AgentDashboardRange } from "@/lib/api/types";
 import { agentKeys } from "@/lib/agent-queries";
 import { daysUntil, formatDate, formatINR, formatNumber } from "@/lib/format";
@@ -52,15 +60,36 @@ function KpiCard({
   hint,
   icon: Icon,
   accent,
+  onClick,
+  selected,
 }: {
   label: string;
   value: string;
   hint: string;
   icon: LucideIcon;
   accent: string;
+  /** Makes the card a button that filters Recent Policy Sales. */
+  onClick?: () => void;
+  selected?: boolean;
 }) {
   return (
-    <article className="group min-w-0 rounded-xl border border-border/80 bg-background/90 p-3 shadow-xs transition-all duration-300 last:col-span-2 hover:border-primary/40 hover:shadow-md sm:rounded-2xl sm:p-5 sm:last:col-span-1 sm:hover:-translate-y-0.5">
+    <article
+      {...(onClick
+        ? {
+            role: "button",
+            tabIndex: 0,
+            onClick,
+            onKeyDown: (event: React.KeyboardEvent) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onClick();
+              }
+            },
+          }
+        : {})}
+      aria-pressed={onClick ? Boolean(selected) : undefined}
+      className={`${onClick ? "cursor-pointer " : ""}${selected ? "border-primary ring-1 ring-primary/40 " : ""}group min-w-0 rounded-xl border border-border/80 bg-background/90 p-3 shadow-xs transition-all duration-300 last:col-span-2 hover:border-primary/40 hover:shadow-md sm:rounded-2xl sm:p-5 sm:last:col-span-1 sm:hover:-translate-y-0.5`}
+    >
       <div className="flex items-center justify-between gap-2">
         <span className="truncate text-[11px] font-bold tracking-wide text-muted-foreground sm:uppercase sm:tracking-wider">
           {label}
@@ -79,15 +108,25 @@ function KpiCard({
   );
 }
 
-function KpiGrid({ summary }: { summary: AgentDashboard["summary"] }) {
+type SaleFilter = "" | "ACTIVE" | "EXPIRING" | "EXPIRED";
+
+const saleFilterLabel: Record<SaleFilter, string> = {
+  "": "All status",
+  ACTIVE: "Active",
+  EXPIRING: "Expiring soon",
+  EXPIRED: "Expired",
+};
+
+function KpiGrid({
+  summary,
+  filter,
+  onFilter,
+}: {
+  summary: AgentDashboard["summary"];
+  filter: SaleFilter;
+  onFilter: (filter: SaleFilter) => void;
+}) {
   const cards = [
-    {
-      label: "My Customers",
-      value: formatNumber(summary.customers),
-      hint: "Assigned to you",
-      icon: Users,
-      accent: "bg-primary/10 text-primary",
-    },
     {
       label: "Policies Sold",
       value: formatNumber(summary.policiesSold),
@@ -101,6 +140,7 @@ function KpiGrid({ summary }: { summary: AgentDashboard["summary"] }) {
       hint: "In force today",
       icon: CheckCircle2,
       accent: "bg-emerald-500/10 text-emerald-700",
+      filter: "ACTIVE" as const,
     },
     {
       label: "Total Premium",
@@ -115,6 +155,15 @@ function KpiGrid({ summary }: { summary: AgentDashboard["summary"] }) {
       hint: "Within 30 days",
       icon: CalendarClock,
       accent: "bg-teal-500/15 text-teal-700",
+      filter: "EXPIRING" as const,
+    },
+    {
+      label: "Expired",
+      value: formatNumber(summary.expiredPolicies),
+      hint: "Due for renewal",
+      icon: AlertTriangle,
+      accent: "bg-red-500/10 text-red-700 dark:text-red-400",
+      filter: "EXPIRED" as const,
     },
   ];
   return (
@@ -122,8 +171,17 @@ function KpiGrid({ summary }: { summary: AgentDashboard["summary"] }) {
       aria-label="Key figures"
       className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3 2xl:grid-cols-5"
     >
-      {cards.map((card) => (
-        <KpiCard key={card.label} {...card} />
+      {cards.map(({ filter: cardFilter, ...card }) => (
+        <KpiCard
+          key={card.label}
+          {...card}
+          {...(cardFilter
+            ? {
+                onClick: () => onFilter(filter === cardFilter ? "" : cardFilter),
+                selected: filter === cardFilter,
+              }
+            : {})}
+        />
       ))}
     </section>
   );
@@ -255,17 +313,45 @@ function DaysRemaining({ expiryDate }: { expiryDate: string }) {
 }
 
 function RecentSales({
-  sales,
+  sales: recentSales,
+  filter,
+  onFilterChange,
   onView,
 }: {
   sales: AgentDashboard["recentSales"];
+  filter: SaleFilter;
+  onFilterChange: (filter: SaleFilter) => void;
   onView: (id: string) => void;
 }) {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search.trim());
+  const filtering = Boolean(debouncedSearch || filter);
+  const listParams = {
+    limit: 20,
+    search: debouncedSearch || undefined,
+    expiry: filter || undefined,
+    // Most recently lapsed first; soonest expiry first; otherwise newest sale.
+    sortBy: filter === "EXPIRING" || filter === "EXPIRED" ? "expiryDate" : "issueDate",
+    order: filter === "EXPIRING" ? ("asc" as const) : ("desc" as const),
+  };
+  const filtered = useQuery({
+    queryKey: agentKeys.soldPolicies({ ...listParams, dashboardList: true }),
+    queryFn: () => soldPoliciesApi.list(listParams),
+    enabled: filtering,
+    placeholderData: keepPreviousData,
+    retry: retryUnlessClientError,
+  });
+  const sales = filtering ? (filtered.data?.data ?? []) : recentSales;
+
   return (
     <SectionCard
       title="Recent Policy Sales"
       icon={ShieldCheck}
-      description="Your latest policy sales"
+      description={
+        filtering
+          ? `${filtered.data?.meta.total ?? "…"} matching ${filtered.data?.meta.total === 1 ? "sale" : "sales"}`
+          : "Your latest policy sales"
+      }
       actions={
         <Link
           to="/agent/sold-policies"
@@ -275,7 +361,54 @@ function RecentSales({
         </Link>
       }
     >
-      {sales.length === 0 ? (
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative min-w-52 flex-1 sm:max-w-sm">
+          <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
+          <Input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search by customer, policy or number"
+            aria-label="Search recent sales"
+            className="h-9 rounded-xl pl-9 text-xs"
+          />
+        </div>
+        <NativeSelect
+          value={filter}
+          onChange={(event) => onFilterChange(event.target.value as SaleFilter)}
+          aria-label="Filter by status"
+        >
+          {(Object.keys(saleFilterLabel) as SaleFilter[]).map((key) => (
+            <option key={key || "all"} value={key}>
+              {saleFilterLabel[key]}
+            </option>
+          ))}
+        </NativeSelect>
+        {filtering && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="rounded-lg text-xs"
+            onClick={() => {
+              setSearch("");
+              onFilterChange("");
+            }}
+          >
+            <RotateCcw /> Reset
+          </Button>
+        )}
+      </div>
+
+      {filtering && filtered.isLoading ? (
+        <Skeleton className="h-40 rounded-xl" />
+      ) : filtering && sales.length === 0 ? (
+        <EmptyState
+          icon={Search}
+          title="No sales match these filters"
+          description="Try a different name or status."
+        />
+      ) : sales.length === 0 ? (
         <EmptyState
           icon={ShoppingBag}
           title="No policies recorded yet"
@@ -308,7 +441,12 @@ function RecentSales({
                           <span className="truncate font-mono text-[11px] font-bold">
                             {sale.policyNumber}
                           </span>
-                          <PolicyStatusBadge status={sale.policyStatus} />
+                          <SaleTypeBadge renewal={sale.isRenewal} />
+                          <SaleStatusBadge
+                            status={sale.policyStatus}
+                            expiryDate={sale.expiryDate}
+                            renewed={sale.isRenewed}
+                          />
                         </div>
                         <p className="truncate text-xs text-muted-foreground">
                           {sale.policy.policyName}
@@ -360,7 +498,10 @@ function RecentSales({
               </thead>
               <tbody className="divide-y divide-border/50 font-medium">
                 {sales.map((sale) => (
-                  <tr key={sale.id} className="transition-colors hover:bg-muted/40">
+                  <tr
+                    key={sale.id}
+                    className={`transition-colors hover:bg-muted/40 ${expiryStatus(sale.expiryDate, sale.isRenewed).row}`}
+                  >
                     <td className={tdClass}>
                       <CodeChip>{sale.policyNumber}</CodeChip>
                     </td>
@@ -370,7 +511,12 @@ function RecentSales({
                         {sale.customer.customerCode}
                       </p>
                     </td>
-                    <td className={`${tdClass} text-foreground`}>{sale.policy.policyName}</td>
+                    <td className={`${tdClass} text-foreground`}>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {sale.policy.policyName}
+                        <SaleTypeBadge renewal={sale.isRenewal} />
+                      </div>
+                    </td>
                     <td className={tdClass}>
                       <InsuranceTypeBadge type={sale.policy.insuranceType} />
                     </td>
@@ -387,7 +533,11 @@ function RecentSales({
                       <DaysRemaining expiryDate={sale.expiryDate} />
                     </td>
                     <td className={tdClass}>
-                      <PolicyStatusBadge status={sale.policyStatus} />
+                      <SaleStatusBadge
+                        status={sale.policyStatus}
+                        expiryDate={sale.expiryDate}
+                        renewed={sale.isRenewed}
+                      />
                     </td>
                     <td className={`${tdClass} text-right`}>
                       <div className="flex justify-end gap-1.5">
@@ -491,6 +641,12 @@ function AgentDashboardPage() {
   const navigate = useNavigate();
   const [range, setRange] = useState<AgentDashboardRange>("30D");
   const [viewSaleId, setViewSaleId] = useState<string | null>(null);
+  const [saleFilter, setSaleFilter] = useState<SaleFilter>("");
+  const salesRef = useRef<HTMLDivElement>(null);
+  const filterSales = (next: SaleFilter) => {
+    setSaleFilter(next);
+    if (next) salesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   const dashboard = useQuery({
     queryKey: agentKeys.dashboard(range),
@@ -558,7 +714,7 @@ function AgentDashboardPage() {
       {data && (
         <>
           <div className="max-lg:order-2">
-            <KpiGrid summary={data.summary} />
+            <KpiGrid summary={data.summary} filter={saleFilter} onFilter={filterSales} />
           </div>
 
           <div className="max-lg:order-3">
@@ -575,8 +731,13 @@ function AgentDashboardPage() {
             <PolicyDistributionChart distribution={data.policyDistribution} />
           </div>
 
-          <div className="max-lg:order-5">
-            <RecentSales sales={data.recentSales} onView={setViewSaleId} />
+          <div ref={salesRef} className="scroll-mt-20 max-lg:order-5">
+            <RecentSales
+              sales={data.recentSales}
+              filter={saleFilter}
+              onFilterChange={setSaleFilter}
+              onView={setViewSaleId}
+            />
           </div>
 
           <div className="grid grid-cols-1 gap-6 max-lg:order-6 lg:grid-cols-3">

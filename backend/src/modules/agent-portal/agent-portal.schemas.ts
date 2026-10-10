@@ -24,6 +24,10 @@ export const agentDashboardSchema = z
       premiumCollected: z.number().describe("Sum of PAID receipts"),
       pendingPayments: z.number().int().describe("Sales still awaiting payment"),
       expiringSoon: z.number().int().describe("ACTIVE/PENDING sales expiring within the window"),
+      expiredPolicies: z
+        .number()
+        .int()
+        .describe("Sales past their expiry date, excluding CANCELLED"),
     }),
     salesTrend: salesSeriesSchema,
     policyDistribution: distributionSchema,

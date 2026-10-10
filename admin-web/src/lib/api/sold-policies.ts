@@ -16,12 +16,20 @@ export interface SoldPolicyListParams extends ListParams {
   agentId?: string | undefined;
   customerId?: string | undefined;
   policyId?: string | undefined;
+  /** In force / expiring within 30 days / past expiry. */
+  expiry?: "ACTIVE" | "EXPIRING" | "EXPIRED" | undefined;
 }
 
 export interface SalePolicyInput {
   policyId: string;
   customerId: string;
   issueDate?: string | undefined;
+  /** When the policy was first issued, for a renewal. Leave out for a new policy. */
+  inceptionDate?: string | undefined;
+  /** The earlier sale this renews; it stops counting as expired. */
+  renewsSoldPolicyId?: string | undefined;
+  /** Set when renewing an earlier policy; lets an agent adjust the premium. */
+  renewal?: boolean | undefined;
   /** Premium collected at the point of sale: a receipt is generated with the sale. */
   paymentMethod?: PaymentMethod | undefined;
   /** SUPER_ADMIN only. */
@@ -52,8 +60,11 @@ export const soldPoliciesApi = {
       policyStatus: SoldPolicyStatus;
       paymentStatus: PaymentStatus;
       issueDate: string;
+      inceptionDate: string | null;
       expiryDate: string;
       premium: number;
+      insurerPolicyNumber: string;
     }>,
   ) => apiRequest<ApiSoldPolicyDetail>(`/sold-policies/${id}`, { method: "PATCH", body: input }),
+  remove: (id: string) => apiRequest<{ id: string }>(`/sold-policies/${id}`, { method: "DELETE" }),
 };

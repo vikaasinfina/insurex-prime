@@ -1,5 +1,6 @@
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
-import { requireAuth, tenantAdminOnly } from "../../middleware/role.js";
+import { z } from "zod";
+import { requireAuth } from "../../middleware/role.js";
 import {
   errorResponses,
   ok,
@@ -19,6 +20,7 @@ import {
 } from "./sold-policies.schemas.js";
 import {
   createSoldPolicy,
+  deleteSoldPolicy,
   getSoldPolicy,
   listSoldPolicies,
   quoteSoldPolicy,
@@ -106,17 +108,41 @@ export const soldPolicyRoutes: FastifyPluginAsyncZod = async (app) => {
   app.patch(
     "/:id",
     {
-      preHandler: tenantAdminOnly,
       schema: {
         tags,
         security,
-        summary: "Update a sold policy (SUPER_ADMIN)",
+        summary: "Update a sold policy (admins any; agents their own)",
         params: soldPolicyIdParamsSchema,
         body: updateSoldPolicyBodySchema,
         response: { 200: successSchema(soldPolicyDetailSchema), ...errorResponses },
       },
     },
     async (request) =>
-      ok(await updateSoldPolicy(request.db, request, request.params.id, request.body)),
+      ok(
+        await updateSoldPolicy(
+          request.db,
+          requireAuth(request),
+          request,
+          request.params.id,
+          request.body,
+        ),
+      ),
+  );
+
+  app.delete(
+    "/:id",
+    {
+      schema: {
+        tags,
+        security,
+        summary: "Delete a sold policy and its receipts (admins any; agents their own)",
+        params: soldPolicyIdParamsSchema,
+        response: { 200: successSchema(z.object({ id: z.uuid() })), ...errorResponses },
+      },
+    },
+    async (request) => {
+      await deleteSoldPolicy(request.db, requireAuth(request), request, request.params.id);
+      return ok({ id: request.params.id });
+    },
   );
 };

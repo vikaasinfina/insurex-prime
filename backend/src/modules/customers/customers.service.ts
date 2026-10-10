@@ -102,6 +102,11 @@ export async function getCustomer(db: Database, auth: AuthContext, id: string) {
         include: {
           policy: { select: { policyName: true, insuranceType: true } },
           agent: agentRefSelect,
+          renewals: {
+            where: { policyStatus: { not: "CANCELLED" } },
+            select: { id: true },
+            take: 1,
+          },
         },
       },
     },
@@ -119,6 +124,8 @@ export async function getCustomer(db: Database, auth: AuthContext, id: string) {
       expiryDate: toDateOnly(sold.expiryDate),
       paymentStatus: sold.paymentStatus,
       policyStatus: sold.policyStatus,
+      isRenewal: sold.renewedFromId !== null,
+      isRenewed: sold.renewals.length > 0,
       agent: sold.agent,
     })),
   };

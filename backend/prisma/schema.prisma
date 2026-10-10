@@ -323,17 +323,23 @@ model SoldPolicy {
   /// Premium agreed at sale time; catalog prices can change later.
   premium             Decimal          @db.Decimal(12, 2)
   issueDate           DateTime         @db.Date
+  /// First time this policy was ever issued (before renewals). Null means a new policy: age counts from issueDate.
+  inceptionDate       DateTime?        @db.Date
   expiryDate          DateTime         @db.Date
   paymentStatus       PaymentStatus    @default(PENDING)
   policyStatus        SoldPolicyStatus @default(PENDING)
+  /// The earlier sale this one renews. That sale stops counting as expired. Cleared if this sale is deleted.
+  renewedFromId       String?          @db.Uuid
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 
-  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  policy   Policy    @relation(fields: [policyId], references: [id], onDelete: Restrict)
-  customer Customer  @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  agent    Agent     @relation(fields: [agentId], references: [id], onDelete: Restrict)
-  receipts Receipt[]
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  policy      Policy       @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  customer    Customer     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  agent       Agent        @relation(fields: [agentId], references: [id], onDelete: Restrict)
+  receipts    Receipt[]
+  renewedFrom SoldPolicy?  @relation("Renewal", fields: [renewedFromId], references: [id], onDelete: SetNull)
+  renewals    SoldPolicy[] @relation("Renewal")
 
   @@index([tenantId, issueDate])
   @@index([agentId, issueDate])
@@ -343,6 +349,7 @@ model SoldPolicy {
   @@index([issueDate])
   @@index([policyStatus])
   @@index([paymentStatus])
+  @@index([renewedFromId])
   @@map("sold_policies")
 }
 

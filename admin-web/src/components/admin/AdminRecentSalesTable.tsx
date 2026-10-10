@@ -1,3 +1,4 @@
+import { SaleTypeBadge } from "@/components/SaleTypeBadge";
 import { Link } from "@tanstack/react-router";
 import {
   ArrowRight,
@@ -149,7 +150,12 @@ export function AdminRecentSalesTable({ policies }: AdminRecentSalesTableProps) 
                   </td>
 
                   {/* Policy Name */}
-                  <td className="py-3.5 px-4 text-foreground font-medium">{policy.policyName}</td>
+                  <td className="py-3.5 px-4 text-foreground font-medium">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {policy.policyName}
+                      <SaleTypeBadge renewal={policy.isRenewal ?? false} />
+                    </div>
+                  </td>
 
                   {/* Agent */}
                   <td className="py-3.5 px-4 text-muted-foreground">

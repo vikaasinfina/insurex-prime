@@ -1,3 +1,4 @@
+import { SaleTypeBadge } from "@/components/SaleTypeBadge";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
@@ -591,7 +592,10 @@ function CustomerDetailsDialog({
                         <FileText className="size-4" />
                       </span>
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold">{policy.policyName}</p>
+                        <p className="flex items-center gap-1.5 truncate text-sm font-semibold">
+                          {policy.policyName}
+                          <SaleTypeBadge renewal={policy.isRenewal ?? false} />
+                        </p>
                         <p className="text-xs text-muted-foreground">
                           {policy.policyNumber} · {policy.type} · {policy.agentName}
                         </p>

@@ -5,7 +5,6 @@ import {
   ArrowRight,
   Check,
   CheckCircle2,
-  ChevronsUpDown,
   RefreshCw,
   FilePlus2,
   Loader2,
@@ -25,16 +24,16 @@ import {
   NativeSelect,
   SectionCard,
 } from "@/components/agent/agent-ui";
-import { Button } from "@/components/ui/button";
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -49,12 +48,15 @@ import {
   soldPoliciesApi,
   type ApiCustomer,
   type ApiPolicy,
+  type ApiSoldPolicy,
   type ApiSoldPolicyDetail,
   type CatalogLine,
 } from "@/lib/api";
+import { policyAge } from "@/lib/policy-age";
 import { adminKeys } from "@/lib/admin-queries";
 import { agentKeys } from "@/lib/agent-queries";
 import {
+  daysUntil,
   formatDate,
   formatDuration,
   formatINR,
@@ -216,104 +218,207 @@ function allPoliciesOfLine(line: CatalogLine) {
   ].sort((a, b) => a.policyName.localeCompare(b.policyName));
 }
 
-function RenewalPicker({
+/** What a renewal copies from the policy being renewed. */
+interface RenewalPrefill {
+  agentId: string;
+  issueDate: string;
+  inceptionDate: string;
+  premium: string;
+  insurerPolicyNumber: string;
+  /** Length of the previous term, reused when the catalog has no fixed duration. */
+  spanDays: number;
+}
+
+const daysBetween = (from: string, to: string) =>
+  Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+
+/** One row per policy: when a customer has renewed the same policy for years, only the latest shows. */
+function latestPerPolicy(sales: ApiSoldPolicy[]) {
+  const seen = new Set<string>();
+  return [...sales]
+    .sort((a, b) => b.issueDate.localeCompare(a.issueDate))
+    .filter((sale) => !seen.has(sale.policy.id) && seen.add(sale.policy.id));
+}
+
+function RenewedPolicyFinder({
   customer,
-  onSelectCustomer,
   busy,
+  onSelectCustomer,
+  onClearCustomer,
+  onSelectSale,
+  onChooseOther,
 }: {
   customer: ApiCustomer | null;
-  onSelectCustomer: (customer: ApiCustomer) => void;
   busy: boolean;
+  onSelectCustomer: (customer: ApiCustomer) => void;
+  onClearCustomer: () => void;
+  onSelectSale: (sale: ApiSoldPolicy) => void;
+  onChooseOther: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const debounced = useDebouncedValue(search.trim());
-  const params = {
-    limit: 50,
+  const customerParams = {
+    limit: 8,
     sortBy: "fullName",
     order: "asc" as const,
-    search: debounced || undefined,
+    search: debounced,
   };
   const customers = useQuery({
-    queryKey: agentKeys.customers({ ...params, renewalPicker: true }),
-    queryFn: () => customersApi.list(params),
-    enabled: open,
+    queryKey: agentKeys.customers({ ...customerParams, renewalFinder: true }),
+    queryFn: () => customersApi.list(customerParams),
+    enabled: !customer && debounced.length > 0,
     placeholderData: keepPreviousData,
     retry: retryUnlessClientError,
   });
+  const salesParams = {
+    customerId: customer?.id,
+    limit: 100,
+    sortBy: "issueDate",
+    order: "desc" as const,
+  };
+  const sales = useQuery({
+    queryKey: agentKeys.soldPolicies({ ...salesParams, renewalFinder: true }),
+    queryFn: () => soldPoliciesApi.list(salesParams),
+    enabled: Boolean(customer),
+    retry: retryUnlessClientError,
+  });
+  const policies = latestPerPolicy(sales.data?.data ?? []);
 
   return (
-    <div className="rounded-xl border border-border/80 bg-background/90 p-3 shadow-xs sm:rounded-2xl sm:p-4">
-      <h2 className="flex items-center gap-1.5 text-sm font-semibold">
-        <RefreshCw className="size-3.5 text-primary" /> Record renewed policy
-      </h2>
-      <div className="mt-3 max-w-md">
-        <p className="mb-1 text-xs text-muted-foreground">
-          Pick the customer. Their last policy and details are filled in. You can still change the
-          policy if they upgraded.
-        </p>
-        <Popover open={open} onOpenChange={setOpen}>
-          <PopoverTrigger asChild>
+    <SectionCard
+      title="Find the policy to renew"
+      icon={RefreshCw}
+      description="Search the customer by name, then pick the policy being renewed. Its details are filled in; only the issue date (and premium, if it changed) needs updating."
+    >
+      {!customer ? (
+        <div className="max-w-xl space-y-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
+            <Input
+              autoFocus
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search customer by name, phone or code…"
+              aria-label="Search customer"
+              className="h-10 rounded-xl pl-9"
+            />
+          </div>
+          {debounced.length === 0 && (
+            <p className="text-xs text-muted-foreground">Start typing the customer's name.</p>
+          )}
+          {customers.isLoading && <Skeleton className="h-16 rounded-xl" />}
+          {customers.error != null && !customers.data && (
+            <p className="text-xs text-destructive">
+              {errorText(customers.error, "Customers could not be loaded.")}
+            </p>
+          )}
+          {customers.data && customers.data.data.length === 0 && (
+            <p className="text-xs text-muted-foreground">No customers found.</p>
+          )}
+          <ul className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/70">
+            {(debounced ? (customers.data?.data ?? []) : []).map((item) => (
+              <li key={item.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelectCustomer(item)}
+                  className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-muted/50 cursor-pointer"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold">{item.fullName}</span>
+                    <span className="block truncate text-[11px] text-muted-foreground">
+                      {item.phone} · {item.customerCode}
+                    </span>
+                  </span>
+                  <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/70 bg-surface/40 px-4 py-2.5">
+            <p className="text-sm">
+              <span className="font-semibold">{customer.fullName}</span>
+              <span className="text-muted-foreground">
+                {" "}
+                · {customer.phone} · {customer.customerCode}
+              </span>
+            </p>
             <Button
               type="button"
-              variant="outline"
-              role="combobox"
-              aria-expanded={open}
-              disabled={busy}
-              className="h-10 w-full justify-between rounded-xl font-normal"
+              variant="ghost"
+              size="sm"
+              className="rounded-lg text-xs"
+              onClick={onClearCustomer}
             >
-              <span className="truncate">
-                {customer ? `${customer.fullName} · ${customer.phone}` : "Select customer"}
-              </span>
-              {busy ? (
-                <Loader2 className="animate-spin" />
-              ) : (
-                <ChevronsUpDown className="opacity-50" />
-              )}
+              Change customer
             </Button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-(--radix-popover-trigger-width) p-0">
-            <Command shouldFilter={false}>
-              <CommandInput
-                placeholder="Search by name, phone or code…"
-                value={search}
-                onValueChange={setSearch}
-              />
-              <CommandList>
-                {customers.isLoading && (
-                  <p className="p-3 text-xs text-muted-foreground">Loading customers…</p>
-                )}
-                {customers.error != null && !customers.data && (
-                  <p className="p-3 text-xs text-destructive">
-                    {errorText(customers.error, "Customers could not be loaded.")}
+          </div>
+
+          {(sales.isLoading || busy) && <Skeleton className="h-24 rounded-xl" />}
+          {sales.error != null && !sales.data && (
+            <ErrorState error={sales.error} onRetry={() => void sales.refetch()} />
+          )}
+          {sales.data && policies.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              {customer.fullName} has no earlier policy to renew.
+            </p>
+          )}
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {policies.map((sale) => {
+              const age = policyAge(sale.inceptionDate);
+              return (
+                <button
+                  key={sale.id}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onSelectSale(sale)}
+                  className="rounded-xl border border-border/70 bg-background p-4 text-left transition-colors hover:border-primary/60 hover:bg-primary/5 disabled:opacity-60 cursor-pointer"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-bold text-foreground">{sale.policy.policyName}</p>
+                    <span className="shrink-0 rounded-full border border-border/70 px-2 py-0.5 text-[11px] font-bold">
+                      {age.label}
+                    </span>
+                  </div>
+                  <div className="mt-1.5">
+                    <InsuranceTypeBadge type={sale.policy.insuranceType} />
+                  </div>
+                  <dl className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <dt className="text-muted-foreground">Premium</dt>
+                      <dd className="font-semibold">{formatINR(sale.premium)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Issued</dt>
+                      <dd className="font-semibold">{formatDate(sale.issueDate)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Expired / expires</dt>
+                      <dd className="font-semibold">{formatDate(sale.expiryDate)}</dd>
+                    </div>
+                  </dl>
+                  <p className="mt-2 font-mono text-[11px] text-muted-foreground">
+                    {sale.policyNumber}
                   </p>
-                )}
-                {customers.data && <CommandEmpty>No customers found.</CommandEmpty>}
-                <CommandGroup>
-                  {(customers.data?.data ?? []).map((item) => (
-                    <CommandItem
-                      key={item.id}
-                      value={item.id}
-                      onSelect={() => {
-                        setOpen(false);
-                        onSelectCustomer(item);
-                      }}
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{item.fullName}</p>
-                        <p className="truncate text-[11px] text-muted-foreground">
-                          {item.phone} · {item.customerCode}
-                        </p>
-                      </div>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
-      </div>
-    </div>
+                </button>
+              );
+            })}
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="rounded-lg text-xs"
+            onClick={onChooseOther}
+          >
+            Customer upgraded? Choose a different policy from the catalog
+          </Button>
+        </div>
+      )}
+    </SectionCard>
   );
 }
 
@@ -532,15 +637,82 @@ function PolicyStep({
 interface SaleDraft {
   insurerPolicyNumber: string;
   issueDate: string;
+  inceptionDate: string;
   expiryDate: string;
   premium: string;
   coverageAmount: string;
   notes: string;
 }
 
+/** Mirrors the backend: N months from the issue date, less one day. */
+function addMonthsMinusDay(iso: string, months: number) {
+  const date = new Date(`${iso}T00:00:00Z`);
+  date.setUTCMonth(date.getUTCMonth() + months);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
+
+function ConfirmDatesDialog({
+  open,
+  onOpenChange,
+  onConfirm,
+  rows,
+  warnings,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => void;
+  rows: ReadonlyArray<readonly [string, string]>;
+  warnings: string[];
+}) {
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent className="rounded-2xl">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            <ShieldAlert className="size-5 text-amber-500" /> Double-check before saving
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            Please check the <strong>issue date</strong> and <strong>expiry date</strong> carefully.
+            They decide when this policy shows as expired and when it is due for renewal.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <dl className="divide-y divide-border/60 rounded-xl border border-border/70 text-sm">
+          {rows.map(([label, value]) => (
+            <div key={label} className="flex items-center justify-between gap-3 px-4 py-2">
+              <dt className="text-muted-foreground">{label}</dt>
+              <dd
+                className={`text-right font-semibold ${label.includes("date") && label !== "Policy inception date" ? "text-primary" : ""}`}
+              >
+                {value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+        {warnings.length > 0 && (
+          <ul className="space-y-1 rounded-xl bg-amber-500/10 px-4 py-3 text-xs font-medium text-amber-700 dark:text-amber-400">
+            {warnings.map((warning) => (
+              <li key={warning}>⚠ {warning}</li>
+            ))}
+          </ul>
+        )}
+        <AlertDialogFooter>
+          <AlertDialogCancel className="rounded-xl">Go back and check</AlertDialogCancel>
+          <Button className="rounded-xl" onClick={onConfirm}>
+            <CheckCircle2 /> Dates are correct, record policy
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 function SaleForm({
   policy,
   renewalCustomer,
+  prefill,
+  isRenewal,
+  renewsSoldPolicyId,
   adminMode,
   onChangePolicy,
   onSold,
@@ -550,6 +722,12 @@ function SaleForm({
   adminMode: boolean;
   /** Set when recording a renewal: the existing customer is reused, not created. */
   renewalCustomer: ApiCustomer | null;
+  /** Details copied from the policy being renewed. */
+  prefill: RenewalPrefill | null;
+  /** Recording a renewal in the agent portal: the premium may be adjusted. */
+  isRenewal: boolean;
+  /** The earlier sale being renewed, so it stops showing as expired. */
+  renewsSoldPolicyId: string | null;
   onChangePolicy: () => void;
   onSold: (sale: ApiSoldPolicyDetail) => void;
 }) {
@@ -558,7 +736,7 @@ function SaleForm({
   // The backend applies the issue-date window to agents only.
   const minDate = adminMode ? "" : shiftIsoDate(today, -ISSUE_PAST_DAYS);
   const maxDate = adminMode ? "" : shiftIsoDate(today, ISSUE_FUTURE_DAYS);
-  const [agentId, setAgentId] = useState("");
+  const [agentId, setAgentId] = useState(prefill?.agentId ?? "");
   const agents = useQuery({
     queryKey: [...adminKeys.agents, "active-for-sale"],
     queryFn: () => agentsApi.list({ limit: 100, status: "ACTIVE" }),
@@ -569,6 +747,8 @@ function SaleForm({
   // enters the real figures. Otherwise the catalog premium and term apply.
   const pricedByAgent = policy.premium === null;
   const termByAgent = policy.durationMonths === null;
+  // Admins may change the catalog premium (e.g. it moved at renewal); agents only when it is unpriced.
+  const premiumEditable = pricedByAgent || adminMode || isRenewal;
   const [customer, setCustomer] = useState<CustomerDraft>(
     renewalCustomer
       ? {
@@ -579,10 +759,11 @@ function SaleForm({
       : emptyCustomer,
   );
   const [form, setForm] = useState<SaleDraft>({
-    insurerPolicyNumber: "",
-    issueDate: today,
-    expiryDate: "",
-    premium: policy.premium === null ? "" : String(policy.premium),
+    insurerPolicyNumber: prefill?.insurerPolicyNumber ?? "",
+    issueDate: prefill?.issueDate ?? today,
+    inceptionDate: prefill?.inceptionDate ?? "",
+    expiryDate: prefill && termByAgent ? shiftIsoDate(prefill.issueDate, prefill.spanDays) : "",
+    premium: prefill?.premium ?? (policy.premium === null ? "" : String(policy.premium)),
     coverageAmount: "",
     notes: "",
   });
@@ -590,6 +771,7 @@ function SaleForm({
     Partial<Record<keyof CustomerDraft | keyof SaleDraft | "agentId", string>>
   >({});
   // Kept across retries so a failed sale never creates the same customer twice.
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [savedCustomer, setSavedCustomer] = useState<ApiCustomer | null>(renewalCustomer);
 
   const clearError = (key: keyof typeof errors) =>
@@ -616,8 +798,15 @@ function SaleForm({
         policyId: policy.id,
         customerId: owner.id,
         ...(adminMode ? { agentId } : {}),
+        ...(isRenewal ? { renewal: true } : {}),
+        ...(isRenewal && renewsSoldPolicyId ? { renewsSoldPolicyId } : {}),
         issueDate: form.issueDate,
-        ...(pricedByAgent ? { premium: Number(form.premium) } : {}),
+        ...(form.inceptionDate ? { inceptionDate: form.inceptionDate } : {}),
+        ...(premiumEditable &&
+        form.premium.trim() !== "" &&
+        (pricedByAgent || Number(form.premium) !== policy.premium)
+          ? { premium: Number(form.premium) }
+          : {}),
         ...(termByAgent ? { expiryDate: form.expiryDate } : {}),
         ...(form.insurerPolicyNumber.trim()
           ? { insurerPolicyNumber: form.insurerPolicyNumber.trim() }
@@ -648,17 +837,43 @@ function SaleForm({
     } else if (!adminMode && (form.issueDate < minDate || form.issueDate > maxDate)) {
       problems.issueDate = `Choose a date between ${formatDate(minDate)} and ${formatDate(maxDate)}.`;
     }
+    if (form.inceptionDate && form.inceptionDate > form.issueDate) {
+      problems.inceptionDate = "Cannot be after the issue date.";
+    }
     if (termByAgent) {
       if (!form.expiryDate) problems.expiryDate = "Enter the expiry date.";
       else if (form.expiryDate <= form.issueDate)
         problems.expiryDate = "Must be after the issue date.";
     }
-    if (pricedByAgent && !(Number(form.premium) > 0)) {
+    if (
+      (pricedByAgent || form.premium.trim() !== "") &&
+      premiumEditable &&
+      !(Number(form.premium) > 0)
+    ) {
       problems.premium = "Enter the premium amount.";
     }
     setErrors(problems);
-    if (Object.keys(problems).length === 0) record.mutate();
+    // Dates drive renewal reminders, so the agent confirms them before anything is saved.
+    if (Object.keys(problems).length === 0) setConfirmOpen(true);
   };
+
+  // What the sale will carry: the agent's date, or the catalog term counted from the issue date.
+  const expiryPreview = termByAgent
+    ? form.expiryDate
+    : policy.durationMonths !== null && /^\d{4}-\d{2}-\d{2}$/.test(form.issueDate)
+      ? addMonthsMinusDay(form.issueDate, policy.durationMonths)
+      : "";
+  const dateWarnings: string[] = [];
+  {
+    const sinceIssue = -daysUntil(form.issueDate);
+    if (sinceIssue > 30) dateWarnings.push(`The issue date is ${sinceIssue} days in the past.`);
+    else if (sinceIssue < -30)
+      dateWarnings.push(`The issue date is ${-sinceIssue} days in the future.`);
+    if (expiryPreview && daysUntil(expiryPreview) < 0)
+      dateWarnings.push("This policy would already be expired on the expiry date shown.");
+    else if (expiryPreview && daysUntil(expiryPreview) > 366 * 5)
+      dateWarnings.push("The expiry date is more than 5 years away.");
+  }
 
   const inputClass = (key: keyof CustomerDraft | keyof SaleDraft) =>
     `h-10 rounded-xl ${errors[key] ? "border-destructive" : ""}`;
@@ -743,7 +958,13 @@ function SaleForm({
 
         <SectionCard title="Policy details" icon={Shield}>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field id="rec-issue" label="Issue date" required error={errors.issueDate}>
+            <Field
+              id="rec-issue"
+              label="Issue date"
+              required
+              error={errors.issueDate}
+              hint="Premium is counted in the week, month and year of this date."
+            >
               <Input
                 id="rec-issue"
                 type="date"
@@ -753,6 +974,22 @@ function SaleForm({
                 onChange={(event) => set("issueDate", event.target.value)}
                 aria-invalid={Boolean(errors.issueDate)}
                 className={inputClass("issueDate")}
+              />
+            </Field>
+            <Field
+              id="rec-inception"
+              label="Policy inception date"
+              error={errors.inceptionDate}
+              hint="When this policy was first issued, before any renewals. Leave blank for a new policy."
+            >
+              <Input
+                id="rec-inception"
+                type="date"
+                max={form.issueDate || undefined}
+                value={form.inceptionDate}
+                onChange={(event) => set("inceptionDate", event.target.value)}
+                aria-invalid={Boolean(errors.inceptionDate)}
+                className={inputClass("inceptionDate")}
               />
             </Field>
             <Field
@@ -782,11 +1019,18 @@ function SaleForm({
               label="Premium (₹)"
               required={pricedByAgent}
               error={errors.premium}
-              {...(pricedByAgent ? {} : { hint: "Fixed by the catalog." })}
+              {...(pricedByAgent
+                ? {}
+                : {
+                    hint:
+                      adminMode || isRenewal
+                        ? "Previous premium. Edit it if it changed at renewal."
+                        : "Fixed by the catalog.",
+                  })}
             >
               <Input
                 id="rec-premium"
-                disabled={!pricedByAgent}
+                disabled={!premiumEditable}
                 type="number"
                 inputMode="decimal"
                 min="0"
@@ -872,6 +1116,26 @@ function SaleForm({
               {errorText(record.error, "The sale could not be recorded.")}
             </p>
           )}
+
+          <ConfirmDatesDialog
+            open={confirmOpen}
+            onOpenChange={setConfirmOpen}
+            onConfirm={() => {
+              setConfirmOpen(false);
+              record.mutate();
+            }}
+            rows={[
+              ["Customer", renewalCustomer?.fullName ?? customer.fullName.trim()],
+              ["Policy", policy.policyName],
+              ["Issue date", formatDate(form.issueDate)],
+              ["Expiry date", expiryPreview ? formatDate(expiryPreview) : "Calculated on save"],
+              ...(form.inceptionDate
+                ? ([["Policy inception date", formatDate(form.inceptionDate)]] as const)
+                : []),
+              ["Premium", form.premium.trim() ? formatINR(Number(form.premium)) : "Catalog price"],
+            ]}
+            warnings={dateWarnings}
+          />
 
           <Button type="submit" disabled={record.isPending} className="h-11 w-full rounded-xl">
             {record.isPending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
@@ -979,8 +1243,25 @@ export function RecordSoldPolicyFlow({
   const [sale, setSale] = useState<ApiSoldPolicyDetail | null>(null);
   // Held here so "Back to policy catalog" returns to what was picked.
   const [selection, setSelection] = useState<CatalogSelection>(emptySelection);
+  const [mode, setMode] = useState<"new" | "renewed">(renewal && !adminMode ? "renewed" : "new");
   const [renewalCustomer, setRenewalCustomer] = useState<ApiCustomer | null>(null);
+  const [prefill, setPrefill] = useState<RenewalPrefill | null>(null);
+  const [renewsId, setRenewsId] = useState<string | null>(null);
+  const [browseCatalog, setBrowseCatalog] = useState(false);
   const [loadingRenewal, setLoadingRenewal] = useState(false);
+  const renewed = mode === "renewed";
+
+  const switchMode = (next: "new" | "renewed") => {
+    if (next === mode) return;
+    setMode(next);
+    setPolicy(null);
+    setSelection(emptySelection);
+    setRenewalCustomer(null);
+    setPrefill(null);
+    setRenewsId(null);
+    setBrowseCatalog(false);
+    onSearchChange?.(undefined);
+  };
 
   // Preselected from "Record sold policy" links on the policy catalog.
   const presetPolicy = useQuery({
@@ -997,34 +1278,33 @@ export function RecordSoldPolicyFlow({
     onSearchChange?.(value?.id);
   };
 
-  // Fills the customer and their most recent policy; the agent may switch to an upgraded one.
-  const pickRenewalCustomer = async (customer: ApiCustomer) => {
-    setRenewalCustomer(customer);
+  // Copies the chosen earlier policy into the sale form; only the dates and premium are revisited.
+  const pickRenewalSale = async (previous: ApiSoldPolicy) => {
     setLoadingRenewal(true);
     try {
-      const last = await soldPoliciesApi.list({
-        customerId: customer.id,
-        limit: 1,
-        sortBy: "issueDate",
-        order: "desc",
+      const renewedPolicy = await policiesApi.get(previous.policy.id);
+      const today = todayIso();
+      setRenewsId(previous.id);
+      setPrefill({
+        agentId: previous.agent.id,
+        // Premium is counted in the week, month and year of the issue date, so a renewal recorded
+        // now defaults to today rather than the old policy's expiry.
+        issueDate: today,
+        inceptionDate: previous.inceptionDate,
+        premium: String(previous.premium),
+        insurerPolicyNumber: previous.insurerPolicyNumber ?? "",
+        spanDays: Math.max(1, daysBetween(previous.issueDate, previous.expiryDate)),
       });
-      const previous = last.data[0];
-      if (!previous) {
-        selectPolicy(null);
-        toast.info(`${customer.fullName} has no earlier policy. Choose the policy to record.`);
-        return;
-      }
-      const renewed = await policiesApi.get(previous.policy.id);
       setSelection({
-        insurerId: renewed.insurerId,
-        line: renewed.insuranceType,
+        insurerId: renewedPolicy.insurerId,
+        line: renewedPolicy.insuranceType,
         categoryId: "",
         subCategoryId: "",
-        policyId: renewed.id,
+        policyId: renewedPolicy.id,
       });
-      selectPolicy(renewed);
+      selectPolicy(renewedPolicy);
     } catch (error) {
-      toast.error(errorText(error, "The customer's earlier policy could not be loaded."));
+      toast.error(errorText(error, "The earlier policy could not be loaded."));
     } finally {
       setLoadingRenewal(false);
     }
@@ -1041,6 +1321,9 @@ export function RecordSoldPolicyFlow({
           setPolicy(null);
           setSelection(emptySelection);
           setRenewalCustomer(null);
+          setPrefill(null);
+          setRenewsId(null);
+          setBrowseCatalog(false);
           onSearchChange?.(undefined);
         }}
       />
@@ -1052,17 +1335,41 @@ export function RecordSoldPolicyFlow({
 
   return (
     <>
-      {renewal && (
-        <RenewalPicker
-          customer={renewalCustomer}
-          onSelectCustomer={(customer) => void pickRenewalCustomer(customer)}
-          busy={loadingRenewal}
-        />
+      {!adminMode && (
+        <div
+          role="tablist"
+          aria-label="Policy type"
+          className="inline-flex rounded-xl border border-border/80 bg-background/90 p-1"
+        >
+          {(
+            [
+              ["new", "New Policy", FilePlus2],
+              ["renewed", "Renewed Policy", RefreshCw],
+            ] as const
+          ).map(([key, label, Icon]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={mode === key}
+              onClick={() => switchMode(key)}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold transition-colors cursor-pointer ${
+                mode === key
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Icon className="size-3.5" /> {label}
+            </button>
+          ))}
+        </div>
       )}
 
-      <div className="rounded-xl border border-border/80 bg-background/90 p-3 shadow-xs sm:rounded-2xl sm:p-4">
-        <Stepper step={step} />
-      </div>
+      {(!renewed || policy || browseCatalog) && (
+        <div className="rounded-xl border border-border/80 bg-background/90 p-3 shadow-xs sm:rounded-2xl sm:p-4">
+          <Stepper step={step} />
+        </div>
+      )}
 
       {presetPolicy.error != null && (
         <p className="rounded-xl bg-amber-500/10 px-4 py-3 text-xs text-amber-800">
@@ -1082,12 +1389,25 @@ export function RecordSoldPolicyFlow({
             className="rounded-lg"
             onClick={() => selectPolicy(null)}
           >
-            <ArrowLeft /> Back to policy catalog
+            <ArrowLeft />{" "}
+            {renewed && !browseCatalog ? "Back to customer's policies" : "Back to policy catalog"}
           </Button>
         </div>
       )}
 
-      {renewal && !renewalCustomer ? null : loadingPreset ? (
+      {renewed && !policy && !browseCatalog ? (
+        <RenewedPolicyFinder
+          customer={renewalCustomer}
+          busy={loadingRenewal}
+          onSelectCustomer={setRenewalCustomer}
+          onClearCustomer={() => {
+            setRenewalCustomer(null);
+            setRenewsId(null);
+          }}
+          onSelectSale={(previous) => void pickRenewalSale(previous)}
+          onChooseOther={() => setBrowseCatalog(true)}
+        />
+      ) : loadingPreset ? (
         <Skeleton className="h-72 rounded-2xl" />
       ) : step === 1 ? (
         <PolicyStep
@@ -1097,9 +1417,12 @@ export function RecordSoldPolicyFlow({
         />
       ) : (
         <SaleForm
-          key={`${policy!.id}:${renewalCustomer?.id ?? ""}`}
+          key={`${policy!.id}:${renewalCustomer?.id ?? ""}:${prefill?.issueDate ?? ""}`}
           policy={policy!}
           renewalCustomer={renewalCustomer}
+          prefill={prefill}
+          isRenewal={renewed}
+          renewsSoldPolicyId={renewsId}
           adminMode={adminMode}
           onChangePolicy={() => selectPolicy(null)}
           onSold={setSale}

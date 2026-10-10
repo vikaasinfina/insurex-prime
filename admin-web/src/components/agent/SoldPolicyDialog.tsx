@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { FileText } from "lucide-react";
+import { SaleTypeBadge } from "@/components/SaleTypeBadge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -52,6 +53,7 @@ export function SoldPolicyDialog({
             <div className="flex flex-wrap items-center gap-2">
               <CodeChip>{sale.policyNumber}</CodeChip>
               <InsuranceTypeBadge type={sale.policy.insuranceType} />
+              <SaleTypeBadge renewal={sale.isRenewal} />
             </div>
             <dl className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <DetailRow label="Customer" value={sale.customer.fullName} />

@@ -15,6 +15,8 @@ export interface CustomerPolicy {
   agentName: string;
   agentCode: string;
   status: PolicyStatus;
+  /** True when this sale renews an earlier one. */
+  isRenewal?: boolean;
 }
 
 export interface Customer {

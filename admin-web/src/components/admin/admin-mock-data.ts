@@ -51,6 +51,8 @@ export interface RecentPolicySale {
   premium: number;
   issueDate: string;
   status: "Active" | "Pending" | "In Review" | "Expired";
+  /** True when this sale renews an earlier one. */
+  isRenewal?: boolean;
 }
 
 export interface PolicyCategorySummary {
