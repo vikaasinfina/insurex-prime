@@ -10,6 +10,7 @@ import { getPolicyDistribution, getSalesOverTime } from "../reports/analytics.se
 import {
   EXPIRING_WINDOW_DAYS,
   expiryWhere,
+  liveStatusWhere,
   notRenewed,
   soldPolicyInclude,
   toSoldPolicyDto,
@@ -126,7 +127,7 @@ export async function getAgentDashboard(
     db.customer.count({ where: { assignedAgentId: agentId } }),
     db.soldPolicy.count({ where: notCancelled }),
     db.soldPolicy.count({
-      where: { agentId, policyStatus: "ACTIVE", expiryDate: { gte: today } },
+      where: { agentId, ...liveStatusWhere("ACTIVE", today) },
     }),
     db.soldPolicy.aggregate({ where: notCancelled, _sum: { premium: true } }),
     db.receipt.aggregate({

@@ -4,7 +4,6 @@ import {
   InsuranceType,
   PaymentStatus,
   PolicyStatus,
-  SoldPolicyStatus,
 } from "../../generated/prisma/enums.js";
 import { dateRangeQuerySchema, paginationQuerySchema } from "../../utils/pagination.js";
 
@@ -55,6 +54,7 @@ export const summarySchema = z
     activeSoldPolicies: z.number().int(),
     pendingSoldPolicies: z.number().int(),
     expiredSoldPolicies: z.number().int(),
+    renewedSoldPolicies: z.number().int().describe("Sales a later sale has renewed"),
     cancelledSoldPolicies: z.number().int(),
     totalPremium: z.number().describe("Premium of non-cancelled sold policies"),
     premiumCollected: z.number().describe("Sum of PAID receipts"),
@@ -97,6 +97,7 @@ export const portfolioSummarySchema = z
       active: z.number().int(),
       pending: z.number().int(),
       expired: z.number().int(),
+      renewed: z.number().int(),
       totalPremium: z.number(),
     }),
   )
@@ -137,7 +138,9 @@ export const salesReportSchema = z
     summary: summarySchema,
     timeline: salesSeriesSchema,
     byType: distributionSchema,
-    byPolicyStatus: z.array(breakdownRow(z.enum(SoldPolicyStatus))),
+    byPolicyStatus: z.array(
+      breakdownRow(z.enum(["ACTIVE", "PENDING", "EXPIRED", "RENEWED", "CANCELLED"])),
+    ),
     byPaymentStatus: z.array(breakdownRow(z.enum(PaymentStatus))),
   })
   .meta({ id: "SalesReport" });

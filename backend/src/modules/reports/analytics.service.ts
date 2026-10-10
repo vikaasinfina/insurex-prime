@@ -2,9 +2,14 @@ import type { Database } from "../../config/database.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import type { InsuranceType, PolicyStatus, AgentStatus } from "../../generated/prisma/enums.js";
 import { badRequest } from "../../utils/errors.js";
-import { toDateOnly, toNumber } from "../../utils/format.js";
+import { parseDateOnly, toDateOnly, toNumber } from "../../utils/format.js";
 import { toDateFilter } from "../../utils/pagination.js";
-import { soldPolicyInclude, toSoldPolicyDto } from "../sold-policies/sold-policies.service.js";
+import {
+  liveStatusWhere,
+  soldPolicyInclude,
+  toSoldPolicyDto,
+  type LiveStatus,
+} from "../sold-policies/sold-policies.service.js";
 
 /** Restricts analytics to one agent (AGENT callers) or everything (null). */
 export interface AnalyticsScope {
@@ -71,23 +76,41 @@ export async function getSummary(db: Database, scope: AnalyticsScope, range: Dat
     ...(scope.agentId ? { agentId: scope.agentId } : {}),
     ...(issueDate ? { issueDate } : {}),
   };
-  const [totalPolicies, activePolicies, byStatus, premium, collected, totalAgents, totalCustomers] =
-    await Promise.all([
-      // Agents only see the catalog they can sell from.
-      db.policy.count({ where: scope.agentId ? { status: "ACTIVE" } : {} }),
-      db.policy.count({ where: { status: "ACTIVE" } }),
-      db.soldPolicy.groupBy({ by: ["policyStatus"], where: soldWhere, _count: { _all: true } }),
-      db.soldPolicy.aggregate({
-        where: { ...soldWhere, policyStatus: { not: "CANCELLED" } },
-        _sum: { premium: true },
-      }),
-      db.receipt.aggregate({
-        where: { paymentStatus: "PAID", soldPolicy: soldWhere },
-        _sum: { amount: true },
-      }),
-      scope.agentId ? Promise.resolve(null) : db.agent.count(),
-      db.customer.count({ where: scope.agentId ? { assignedAgentId: scope.agentId } : {} }),
-    ]);
+  const today = parseDateOnly(new Date().toISOString());
+  const live = (status: LiveStatus) =>
+    db.soldPolicy.count({ where: { ...soldWhere, ...liveStatusWhere(status, today) } });
+  const [
+    totalPolicies,
+    activePolicies,
+    byStatus,
+    premium,
+    collected,
+    totalAgents,
+    totalCustomers,
+    liveActive,
+    livePending,
+    liveExpired,
+    liveRenewed,
+  ] = await Promise.all([
+    // Agents only see the catalog they can sell from.
+    db.policy.count({ where: scope.agentId ? { status: "ACTIVE" } : {} }),
+    db.policy.count({ where: { status: "ACTIVE" } }),
+    db.soldPolicy.groupBy({ by: ["policyStatus"], where: soldWhere, _count: { _all: true } }),
+    db.soldPolicy.aggregate({
+      where: { ...soldWhere, policyStatus: { not: "CANCELLED" } },
+      _sum: { premium: true },
+    }),
+    db.receipt.aggregate({
+      where: { paymentStatus: "PAID", soldPolicy: soldWhere },
+      _sum: { amount: true },
+    }),
+    scope.agentId ? Promise.resolve(null) : db.agent.count(),
+    db.customer.count({ where: scope.agentId ? { assignedAgentId: scope.agentId } : {} }),
+    live("ACTIVE"),
+    live("PENDING"),
+    live("EXPIRED"),
+    live("RENEWED"),
+  ]);
 
   const countFor = (status: string) =>
     byStatus.find((row) => row.policyStatus === status)?._count._all ?? 0;
@@ -95,9 +118,10 @@ export async function getSummary(db: Database, scope: AnalyticsScope, range: Dat
     totalPolicies,
     activePolicies,
     policiesSold: byStatus.reduce((total, row) => total + row._count._all, 0),
-    activeSoldPolicies: countFor("ACTIVE"),
-    pendingSoldPolicies: countFor("PENDING"),
-    expiredSoldPolicies: countFor("EXPIRED"),
+    activeSoldPolicies: liveActive,
+    pendingSoldPolicies: livePending,
+    expiredSoldPolicies: liveExpired,
+    renewedSoldPolicies: liveRenewed,
     cancelledSoldPolicies: countFor("CANCELLED"),
     totalPremium: premium._sum.premium ? toNumber(premium._sum.premium) : 0,
     premiumCollected: collected._sum.amount ? toNumber(collected._sum.amount) : 0,
@@ -232,7 +256,14 @@ export async function getPortfolioSummary(
     { insuranceType: InsuranceType; status: string; count: number; premium: string }[]
   >`
     SELECT p."insuranceType"::text AS "insuranceType",
-           sp."policyStatus"::text AS status,
+           CASE
+             WHEN EXISTS (
+               SELECT 1 FROM sold_policies r
+               WHERE r."renewedFromId" = sp.id AND r."policyStatus"::text <> 'CANCELLED'
+             ) THEN 'RENEWED'
+             WHEN sp."expiryDate" < CURRENT_DATE THEN 'EXPIRED'
+             ELSE sp."policyStatus"::text
+           END AS status,
            COUNT(*)::int AS count,
            COALESCE(SUM(sp.premium), 0)::text AS premium
     FROM sold_policies sp
@@ -240,7 +271,8 @@ export async function getPortfolioSummary(
     WHERE ${where}
     GROUP BY 1, 2`;
   const lines = (["HEALTH", "MOTOR", "LIFE", "COMMERCIAL"] as const).filter(
-    (line) => line === "HEALTH" || line === "MOTOR" || rows.some((row) => row.insuranceType === line),
+    (line) =>
+      line === "HEALTH" || line === "MOTOR" || rows.some((row) => row.insuranceType === line),
   );
   return lines.map((insuranceType) => {
     const own = rows.filter((row) => row.insuranceType === insuranceType);
@@ -251,6 +283,7 @@ export async function getPortfolioSummary(
       active: count("ACTIVE"),
       pending: count("PENDING"),
       expired: count("EXPIRED"),
+      renewed: count("RENEWED"),
       totalPremium: own.reduce((sum, row) => sum + num(row.premium), 0),
     };
   });
@@ -464,10 +497,20 @@ export async function getSalesBreakdown(
     ...(options.insuranceType ? { policy: { insuranceType: options.insuranceType } } : {}),
     ...(issueDate ? { issueDate } : {}),
   };
-  const [byPolicyStatus, byPaymentStatus] = await Promise.all([
-    db.soldPolicy.groupBy({
-      by: ["policyStatus"],
-      where,
+  const today = parseDateOnly(new Date().toISOString());
+  const liveStatuses = ["ACTIVE", "PENDING", "EXPIRED", "RENEWED"] as const;
+  const [byLiveStatus, cancelled, byPaymentStatus] = await Promise.all([
+    Promise.all(
+      liveStatuses.map((status) =>
+        db.soldPolicy.aggregate({
+          where: { ...where, ...liveStatusWhere(status, today) },
+          _count: { _all: true },
+          _sum: { premium: true },
+        }),
+      ),
+    ),
+    db.soldPolicy.aggregate({
+      where: { ...where, policyStatus: "CANCELLED" },
       _count: { _all: true },
       _sum: { premium: true },
     }),
@@ -478,9 +521,13 @@ export async function getSalesBreakdown(
       _sum: { premium: true },
     }),
   ]);
+  const byPolicyStatus = [
+    ...liveStatuses.map((status, index) => ({ status, row: byLiveStatus[index]! })),
+    { status: "CANCELLED" as const, row: cancelled },
+  ].filter(({ row }) => row._count._all > 0);
   return {
-    byPolicyStatus: byPolicyStatus.map((row) => ({
-      status: row.policyStatus,
+    byPolicyStatus: byPolicyStatus.map(({ status, row }) => ({
+      status,
       count: row._count._all,
       premium: row._sum.premium ? toNumber(row._sum.premium) : 0,
     })),

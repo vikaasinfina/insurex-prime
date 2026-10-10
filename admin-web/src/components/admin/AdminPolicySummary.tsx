@@ -91,7 +91,7 @@ export function AdminPolicySummary({ categories }: AdminPolicySummaryProps) {
                 </div>
 
                 {/* Metrics Breakdown Grid */}
-                <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="mt-4 grid grid-cols-4 gap-2 text-center text-xs">
                   <div className="rounded-lg bg-background/80 p-2 border border-border/50">
                     <span className="text-[10px] text-muted-foreground block uppercase font-bold">
                       Total
@@ -110,6 +110,12 @@ export function AdminPolicySummary({ categories }: AdminPolicySummaryProps) {
                     <span className="text-[10px] block uppercase font-bold">Expired</span>
                     <span className="font-display font-bold text-sm mt-0.5 block">
                       {item.expired}
+                    </span>
+                  </div>
+                  <div className="rounded-lg bg-slate-500/5 p-2 border border-slate-500/20 text-slate-600 dark:text-slate-400">
+                    <span className="text-[10px] block uppercase font-bold">Renewed</span>
+                    <span className="font-display font-bold text-sm mt-0.5 block">
+                      {item.renewed ?? 0}
                     </span>
                   </div>
                 </div>

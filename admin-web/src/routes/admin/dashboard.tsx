@@ -152,6 +152,7 @@ function SuperAdminDashboard() {
         active: row.active,
         pending: row.pending,
         expired: row.expired,
+        renewed: row.renewed,
         totalPremium: formatINR(row.totalPremium),
       })),
     [portfolio.data],

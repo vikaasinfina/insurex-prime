@@ -96,8 +96,7 @@ export const dashboardRoutes: FastifyPluginAsyncZod = async (app) => {
         response: { 200: successSchema(portfolioSummarySchema), ...errorResponses },
       },
     },
-    async (request) =>
-      ok(await getPortfolioSummary(request.db, scopeFor(request), request.query)),
+    async (request) => ok(await getPortfolioSummary(request.db, scopeFor(request), request.query)),
   );
 
   app.get(

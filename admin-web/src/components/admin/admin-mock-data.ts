@@ -63,6 +63,8 @@ export interface PolicyCategorySummary {
   total: number;
   active: number;
   expired: number;
+  /** Sales a later sale has renewed (no longer need action). */
+  renewed?: number;
   pending: number;
   totalPremium: string;
 }

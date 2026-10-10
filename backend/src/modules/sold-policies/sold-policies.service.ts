@@ -159,6 +159,29 @@ export const notRenewed: Prisma.SoldPolicyWhereInput = {
   renewals: { none: { policyStatus: { not: "CANCELLED" } } },
 };
 
+export type LiveStatus = "ACTIVE" | "PENDING" | "EXPIRED" | "RENEWED";
+
+/**
+ * The status a sale really has today. The stored policyStatus is never moved to EXPIRED, so
+ * every count and list works from dates instead: cancelled sales are left out, a sale a later
+ * sale renews is RENEWED, otherwise a past expiry is EXPIRED, else the stored ACTIVE/PENDING.
+ */
+export function liveStatusWhere(status: LiveStatus, today: Date): Prisma.SoldPolicyWhereInput {
+  switch (status) {
+    case "ACTIVE":
+      return { policyStatus: "ACTIVE", expiryDate: { gte: today }, ...notRenewed };
+    case "PENDING":
+      return { policyStatus: "PENDING", expiryDate: { gte: today }, ...notRenewed };
+    case "EXPIRED":
+      return { policyStatus: { not: "CANCELLED" }, expiryDate: { lt: today }, ...notRenewed };
+    case "RENEWED":
+      return {
+        policyStatus: { not: "CANCELLED" },
+        renewals: { some: { policyStatus: { not: "CANCELLED" } } },
+      };
+  }
+}
+
 /** Where-clause for the list's `expiry` filter (and the matching dashboard counts). */
 export function expiryWhere(
   expiry: "ACTIVE" | "EXPIRING" | "EXPIRED",
@@ -166,7 +189,7 @@ export function expiryWhere(
 ): Prisma.SoldPolicyWhereInput {
   switch (expiry) {
     case "ACTIVE":
-      return { policyStatus: "ACTIVE", expiryDate: { gte: today } };
+      return liveStatusWhere("ACTIVE", today);
     case "EXPIRING":
       return {
         ...notRenewed,
@@ -174,7 +197,7 @@ export function expiryWhere(
         expiryDate: { gte: today, lte: new Date(today.getTime() + EXPIRING_WINDOW_DAYS * DAY_MS) },
       };
     case "EXPIRED":
-      return { ...notRenewed, policyStatus: { not: "CANCELLED" }, expiryDate: { lt: today } };
+      return liveStatusWhere("EXPIRED", today);
   }
 }
 

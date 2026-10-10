@@ -235,6 +235,7 @@ export interface DashboardSummary {
   activeSoldPolicies: number;
   pendingSoldPolicies: number;
   expiredSoldPolicies: number;
+  renewedSoldPolicies: number;
   cancelledSoldPolicies: number;
   totalPremium: number;
   premiumCollected: number;
@@ -262,6 +263,7 @@ export interface PortfolioSummaryRow {
   active: number;
   pending: number;
   expired: number;
+  renewed: number;
   totalPremium: number;
 }
 

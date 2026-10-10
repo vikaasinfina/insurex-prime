@@ -50,7 +50,11 @@ export const reportsApi = {
       summary: DashboardSummary;
       timeline: SalesSeries;
       byType: PolicyDistributionRow[];
-      byPolicyStatus: { status: SoldPolicyStatus; count: number; premium: number }[];
+      byPolicyStatus: {
+        status: SoldPolicyStatus | "RENEWED";
+        count: number;
+        premium: number;
+      }[];
       byPaymentStatus: { status: PaymentStatus; count: number; premium: number }[];
     }>("/reports/sales", { query: toQuery(params) }),
   policies: (
