@@ -1243,7 +1243,7 @@ export function RecordSoldPolicyFlow({
   const [sale, setSale] = useState<ApiSoldPolicyDetail | null>(null);
   // Held here so "Back to policy catalog" returns to what was picked.
   const [selection, setSelection] = useState<CatalogSelection>(emptySelection);
-  const [mode, setMode] = useState<"new" | "renewed">(renewal && !adminMode ? "renewed" : "new");
+  const [mode, setMode] = useState<"new" | "renewed">(renewal ? "renewed" : "new");
   const [renewalCustomer, setRenewalCustomer] = useState<ApiCustomer | null>(null);
   const [prefill, setPrefill] = useState<RenewalPrefill | null>(null);
   const [renewsId, setRenewsId] = useState<string | null>(null);
@@ -1335,35 +1335,33 @@ export function RecordSoldPolicyFlow({
 
   return (
     <>
-      {!adminMode && (
-        <div
-          role="tablist"
-          aria-label="Policy type"
-          className="inline-flex rounded-xl border border-border/80 bg-background/90 p-1"
-        >
-          {(
-            [
-              ["new", "New Policy", FilePlus2],
-              ["renewed", "Renewed Policy", RefreshCw],
-            ] as const
-          ).map(([key, label, Icon]) => (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={mode === key}
-              onClick={() => switchMode(key)}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold transition-colors cursor-pointer ${
-                mode === key
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Icon className="size-3.5" /> {label}
-            </button>
-          ))}
-        </div>
-      )}
+      <div
+        role="tablist"
+        aria-label="Policy type"
+        className="inline-flex rounded-xl border border-border/80 bg-background/90 p-1"
+      >
+        {(
+          [
+            ["new", "New Policy", FilePlus2],
+            ["renewed", "Renewed Policy", RefreshCw],
+          ] as const
+        ).map(([key, label, Icon]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={mode === key}
+            onClick={() => switchMode(key)}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold transition-colors cursor-pointer ${
+              mode === key
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Icon className="size-3.5" /> {label}
+          </button>
+        ))}
+      </div>
 
       {(!renewed || policy || browseCatalog) && (
         <div className="rounded-xl border border-border/80 bg-background/90 p-3 shadow-xs sm:rounded-2xl sm:p-4">

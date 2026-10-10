@@ -1,3 +1,4 @@
+import type { SoldPolicyStatus } from "@/lib/api/types";
 export interface KpiStats {
   totalPolicies: number;
   policiesSold: number;
@@ -53,6 +54,8 @@ export interface RecentPolicySale {
   status: "Active" | "Pending" | "In Review" | "Expired";
   /** True when this sale renews an earlier one. */
   isRenewal?: boolean;
+  /** Live data only: lets the table work out expired / expiring from the real dates. */
+  live?: { policyStatus: SoldPolicyStatus; expiryDate: string; isRenewed: boolean };
 }
 
 export interface PolicyCategorySummary {

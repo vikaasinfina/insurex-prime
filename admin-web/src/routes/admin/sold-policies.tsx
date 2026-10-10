@@ -4,10 +4,8 @@ import { Button } from "@/components/ui/button";
 import { RecordSoldPolicyFlow } from "@/routes/agent/sell-policy";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
-import { AdminRecentSalesTable } from "@/components/admin/AdminRecentSalesTable";
+import { SoldPoliciesLedger } from "@/components/agent/SoldPoliciesLedger";
 import { useState } from "react";
-import { isApiConfigured } from "@/lib/api";
-import { useAdminSoldPolicies } from "@/hooks/use-admin-live-data";
 import { requireAdminSession } from "@/lib/admin-route-guard";
 import { AdminFooter } from "@/components/admin/AdminFooter";
 
@@ -23,7 +21,7 @@ export const Route = createFileRoute("/admin/sold-policies")({
 function AdminSoldPoliciesPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [recording, setRecording] = useState(false);
-  const { query, sales } = useAdminSoldPolicies({ limit: 50, sortBy: "createdAt", order: "desc" });
+  const [viewId, setViewId] = useState<string | null>(null);
 
   return (
     <div className="min-h-screen bg-surface/30 text-foreground">
@@ -51,7 +49,7 @@ function AdminSoldPoliciesPage() {
               <p className="text-xs text-muted-foreground">
                 {recording
                   ? "Record a policy on behalf of an agent who has shared the sale details."
-                  : "Audit trail of all underwritten policies sold by field agents and online channels."}
+                  : "Audit trail of every policy sold by your agents, with new and renewed sales marked."}
               </p>
             </div>
             {recording ? (
@@ -68,14 +66,19 @@ function AdminSoldPoliciesPage() {
           {recording ? (
             <RecordSoldPolicyFlow adminMode onViewLedger={() => setRecording(false)} />
           ) : (
-            <>
-              {isApiConfigured && query.isError ? (
-                <p role="alert" className="text-sm text-destructive">
-                  Couldn't load sold policies. Retrying automatically.
-                </p>
-              ) : null}
-              <AdminRecentSalesTable policies={sales ?? []} />
-            </>
+            <SoldPoliciesLedger
+              adminMode
+              title="All policy sales"
+              description="Every policy sold by your agents. Search, filter, edit or remove a sale."
+              viewId={viewId}
+              onViewChange={(id) => setViewId(id ?? null)}
+              actions={null}
+              emptyAction={
+                <Button className="rounded-xl" onClick={() => setRecording(true)}>
+                  <FilePlus2 /> Record the first policy
+                </Button>
+              }
+            />
           )}
         </main>
         <AdminFooter />

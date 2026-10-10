@@ -67,6 +67,11 @@ export function toRecentSale(sale: ApiSoldPolicy): RecentPolicySale {
     issueDate: formatDisplayDate(sale.issueDate),
     status: policyStatusLabel(sale.policyStatus),
     isRenewal: sale.isRenewal,
+    live: {
+      policyStatus: sale.policyStatus,
+      expiryDate: sale.expiryDate,
+      isRenewed: sale.isRenewed,
+    },
   };
 }
 

@@ -1,3 +1,4 @@
+import { SaleStatusBadge } from "@/components/agent/agent-ui";
 import { SaleTypeBadge } from "@/components/SaleTypeBadge";
 import { Link } from "@tanstack/react-router";
 import {
@@ -177,7 +178,15 @@ export function AdminRecentSalesTable({ policies }: AdminRecentSalesTableProps) 
 
                   {/* Status Badge */}
                   <td className="py-3.5 pl-4 pr-1 text-right whitespace-nowrap">
-                    {getStatusBadge(policy.status)}
+                    {policy.live ? (
+                      <SaleStatusBadge
+                        status={policy.live.policyStatus}
+                        expiryDate={policy.live.expiryDate}
+                        renewed={policy.live.isRenewed}
+                      />
+                    ) : (
+                      getStatusBadge(policy.status)
+                    )}
                   </td>
                 </tr>
               ))}
