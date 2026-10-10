@@ -167,6 +167,7 @@ through `VITE_PUBLIC_SITE_URL` (see each folder's `.env.example`).
 
 ## Development: backend API
 
+
 The REST API (Fastify + PostgreSQL + Prisma, Firebase token auth) lives in
 [`backend/`](backend/README.md) and is deployed separately from the web apps.
 
