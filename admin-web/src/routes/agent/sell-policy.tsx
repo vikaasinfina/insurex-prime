@@ -368,10 +368,10 @@ function RenewedPolicyFinder({
           type="button"
           variant="ghost"
           size="sm"
-          className="rounded-lg text-xs"
+          className="h-auto max-w-full whitespace-normal rounded-lg py-1.5 text-left text-xs"
           onClick={onChooseOther}
         >
-          Customer upgraded? Choose a different policy from the catalog
+          Customer upgraded? Pick a different policy from the catalog
         </Button>
       </div>
     </SectionCard>
