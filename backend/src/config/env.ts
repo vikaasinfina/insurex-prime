@@ -52,7 +52,7 @@ const envSchema = z
       .default("true")
       .transform((value) => value === "true"),
     // Agent password sign-in sessions (HttpOnly cookie).
-    AGENT_SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(12),
+    AGENT_SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(720),
     // "lax" works when the frontend and API share a site (localhost, or app./api. subdomains).
     // Use "none" only when they are on different sites; it requires Secure cookies (HTTPS).
     AGENT_COOKIE_SAMESITE: z.enum(["lax", "strict", "none"]).default("lax"),
