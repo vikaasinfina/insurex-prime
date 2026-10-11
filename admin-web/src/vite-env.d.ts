@@ -9,6 +9,8 @@ interface ImportMetaEnv {
   readonly VITE_FIREBASE_APP_ID: string;
   /** Optional InsuroX backend origin. When unset, pages use built-in demo data. */
   readonly VITE_API_BASE_URL?: string;
+  /** Days before expiry when a policy can be renewed (default 30). */
+  readonly VITE_RENEWABLE_WITHIN_DAYS?: string;
 }
 
 declare namespace NodeJS {

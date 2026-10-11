@@ -52,7 +52,7 @@ import {
   type ApiSoldPolicyDetail,
   type CatalogLine,
 } from "@/lib/api";
-import { policyAge } from "@/lib/policy-age";
+import { expiryStatus } from "@/lib/expiry-status";
 import { adminKeys } from "@/lib/admin-queries";
 import { agentKeys } from "@/lib/agent-queries";
 import {
@@ -240,184 +240,140 @@ function latestPerPolicy(sales: ApiSoldPolicy[]) {
     .filter((sale) => !seen.has(sale.policy.id) && seen.add(sale.policy.id));
 }
 
+/** A policy can be renewed once it has expired or is this close to expiring. */
+const RENEWABLE_WITHIN_DAYS = (() => {
+  const days = Number(import.meta.env.VITE_RENEWABLE_WITHIN_DAYS);
+  return Number.isFinite(days) && days >= 0 ? days : 30;
+})();
+
 function RenewedPolicyFinder({
-  customer,
   busy,
-  onSelectCustomer,
-  onClearCustomer,
   onSelectSale,
   onChooseOther,
 }: {
-  customer: ApiCustomer | null;
   busy: boolean;
-  onSelectCustomer: (customer: ApiCustomer) => void;
-  onClearCustomer: () => void;
   onSelectSale: (sale: ApiSoldPolicy) => void;
   onChooseOther: () => void;
 }) {
   const [search, setSearch] = useState("");
   const debounced = useDebouncedValue(search.trim());
-  const customerParams = {
-    limit: 8,
-    sortBy: "fullName",
-    order: "asc" as const,
-    search: debounced,
-  };
-  const customers = useQuery({
-    queryKey: agentKeys.customers({ ...customerParams, renewalFinder: true }),
-    queryFn: () => customersApi.list(customerParams),
-    enabled: !customer && debounced.length > 0,
-    placeholderData: keepPreviousData,
-    retry: retryUnlessClientError,
-  });
+  const searching = debounced.length > 0;
+  // Expired policies by default; a search looks across all of a customer's policies instead.
   const salesParams = {
-    customerId: customer?.id,
     limit: 100,
-    sortBy: "issueDate",
-    order: "desc" as const,
+    sortBy: "expiryDate",
+    order: searching ? ("desc" as const) : ("asc" as const),
+    search: debounced || undefined,
+    expiry: searching ? undefined : ("EXPIRED" as const),
   };
   const sales = useQuery({
     queryKey: agentKeys.soldPolicies({ ...salesParams, renewalFinder: true }),
     queryFn: () => soldPoliciesApi.list(salesParams),
-    enabled: Boolean(customer),
+    placeholderData: keepPreviousData,
     retry: retryUnlessClientError,
   });
-  const policies = latestPerPolicy(sales.data?.data ?? []);
+  const policies = searching ? latestPerPolicy(sales.data?.data ?? []) : (sales.data?.data ?? []);
 
   return (
     <SectionCard
       title="Find the policy to renew"
       icon={RefreshCw}
-      description="Search the customer by name, then pick the policy being renewed. Its details are filled in; only the issue date (and premium, if it changed) needs updating."
+      description="Expired policies are listed first. Search by customer or policy to find any other. Its details are filled in; only the issue date (and premium, if it changed) needs updating."
     >
-      {!customer ? (
-        <div className="max-w-xl space-y-3">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
-            <Input
-              autoFocus
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search customer by name, phone or code…"
-              aria-label="Search customer"
-              className="h-10 rounded-xl pl-9"
-            />
-          </div>
-          {debounced.length === 0 && (
-            <p className="text-xs text-muted-foreground">Start typing the customer's name.</p>
-          )}
-          {customers.isLoading && <Skeleton className="h-16 rounded-xl" />}
-          {customers.error != null && !customers.data && (
-            <p className="text-xs text-destructive">
-              {errorText(customers.error, "Customers could not be loaded.")}
-            </p>
-          )}
-          {customers.data && customers.data.data.length === 0 && (
-            <p className="text-xs text-muted-foreground">No customers found.</p>
-          )}
-          <ul className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/70">
-            {(debounced ? (customers.data?.data ?? []) : []).map((item) => (
-              <li key={item.id}>
-                <button
-                  type="button"
-                  onClick={() => onSelectCustomer(item)}
-                  className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-muted/50 cursor-pointer"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold">{item.fullName}</span>
-                    <span className="block truncate text-[11px] text-muted-foreground">
-                      {item.phone} · {item.customerCode}
-                    </span>
-                  </span>
-                  <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
-                </button>
-              </li>
-            ))}
-          </ul>
+      <div className="space-y-4">
+        <div className="relative max-w-xl">
+          <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
+          <Input
+            autoFocus
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search customer name, code or policy…"
+            aria-label="Search customer or policy"
+            className="h-10 rounded-xl pl-9"
+          />
         </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/70 bg-surface/40 px-4 py-2.5">
-            <p className="text-sm">
-              <span className="font-semibold">{customer.fullName}</span>
-              <span className="text-muted-foreground">
-                {" "}
-                · {customer.phone} · {customer.customerCode}
-              </span>
-            </p>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="rounded-lg text-xs"
-              onClick={onClearCustomer}
-            >
-              Change customer
-            </Button>
-          </div>
 
-          {(sales.isLoading || busy) && <Skeleton className="h-24 rounded-xl" />}
-          {sales.error != null && !sales.data && (
-            <ErrorState error={sales.error} onRetry={() => void sales.refetch()} />
-          )}
-          {sales.data && policies.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              {customer.fullName} has no earlier policy to renew.
-            </p>
-          )}
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {policies.map((sale) => {
-              const age = policyAge(sale.inceptionDate);
-              return (
-                <button
-                  key={sale.id}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => onSelectSale(sale)}
-                  className="rounded-xl border border-border/70 bg-background p-4 text-left transition-colors hover:border-primary/60 hover:bg-primary/5 disabled:opacity-60 cursor-pointer"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-bold text-foreground">{sale.policy.policyName}</p>
-                    <span className="shrink-0 rounded-full border border-border/70 px-2 py-0.5 text-[11px] font-bold">
-                      {age.label}
-                    </span>
+        {(sales.isLoading || busy) && <Skeleton className="h-24 rounded-xl" />}
+        {sales.error != null && !sales.data && (
+          <ErrorState error={sales.error} onRetry={() => void sales.refetch()} />
+        )}
+        {sales.data && policies.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            {searching ? "No matching policies found." : "No expired policies to renew."}
+          </p>
+        )}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {policies.map((sale) => {
+            const status = expiryStatus(sale.expiryDate, sale.isRenewed);
+            // Renewals are recorded only once a policy has lapsed or is within 30 days of expiry.
+            const renewable =
+              !sale.isRenewed && daysUntil(sale.expiryDate) <= RENEWABLE_WITHIN_DAYS;
+            return (
+              <button
+                key={sale.id}
+                type="button"
+                disabled={busy || !renewable}
+                aria-disabled={!renewable}
+                title={
+                  renewable
+                    ? undefined
+                    : `Still active: it can be renewed within ${RENEWABLE_WITHIN_DAYS} days of expiry.`
+                }
+                onClick={() => renewable && onSelectSale(sale)}
+                className={`rounded-xl border border-border/70 bg-background p-4 text-left transition-colors ${
+                  renewable
+                    ? "cursor-pointer hover:border-primary/60 hover:bg-primary/5 disabled:opacity-60"
+                    : "cursor-default opacity-80"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-foreground">{sale.customer.fullName}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {sale.policy.policyName} · {sale.customer.customerCode}
+                    </p>
                   </div>
-                  <div className="mt-1.5">
-                    <InsuranceTypeBadge type={sale.policy.insuranceType} />
+                  <span
+                    className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-bold ${status.badge}`}
+                  >
+                    {status.label}
+                  </span>
+                </div>
+                <div className="mt-1.5">
+                  <InsuranceTypeBadge type={sale.policy.insuranceType} />
+                </div>
+                <dl className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                  <div>
+                    <dt className="text-muted-foreground">Premium</dt>
+                    <dd className="font-semibold">{formatINR(sale.premium)}</dd>
                   </div>
-                  <dl className="mt-3 grid grid-cols-3 gap-2 text-xs">
-                    <div>
-                      <dt className="text-muted-foreground">Premium</dt>
-                      <dd className="font-semibold">{formatINR(sale.premium)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-muted-foreground">Issued</dt>
-                      <dd className="font-semibold">{formatDate(sale.issueDate)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-muted-foreground">Expired / expires</dt>
-                      <dd className="font-semibold">{formatDate(sale.expiryDate)}</dd>
-                    </div>
-                  </dl>
-                  <p className="mt-2 font-mono text-[11px] text-muted-foreground">
-                    {sale.policyNumber}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="rounded-lg text-xs"
-            onClick={onChooseOther}
-          >
-            Customer upgraded? Choose a different policy from the catalog
-          </Button>
+                  <div>
+                    <dt className="text-muted-foreground">Issued</dt>
+                    <dd className="font-semibold">{formatDate(sale.issueDate)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Expired / expires</dt>
+                    <dd className="font-semibold">{formatDate(sale.expiryDate)}</dd>
+                  </div>
+                </dl>
+                <p className="mt-2 font-mono text-[11px] text-muted-foreground">
+                  {sale.policyNumber}
+                </p>
+              </button>
+            );
+          })}
         </div>
-      )}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="rounded-lg text-xs"
+          onClick={onChooseOther}
+        >
+          Customer upgraded? Choose a different policy from the catalog
+        </Button>
+      </div>
     </SectionCard>
   );
 }
@@ -1282,8 +1238,12 @@ export function RecordSoldPolicyFlow({
   const pickRenewalSale = async (previous: ApiSoldPolicy) => {
     setLoadingRenewal(true);
     try {
-      const renewedPolicy = await policiesApi.get(previous.policy.id);
+      const [renewedPolicy, customer] = await Promise.all([
+        policiesApi.get(previous.policy.id),
+        customersApi.get(previous.customer.id),
+      ]);
       const today = todayIso();
+      setRenewalCustomer(customer);
       setRenewsId(previous.id);
       setPrefill({
         agentId: previous.agent.id,
@@ -1395,13 +1355,7 @@ export function RecordSoldPolicyFlow({
 
       {renewed && !policy && !browseCatalog ? (
         <RenewedPolicyFinder
-          customer={renewalCustomer}
           busy={loadingRenewal}
-          onSelectCustomer={setRenewalCustomer}
-          onClearCustomer={() => {
-            setRenewalCustomer(null);
-            setRenewsId(null);
-          }}
           onSelectSale={(previous) => void pickRenewalSale(previous)}
           onChooseOther={() => setBrowseCatalog(true)}
         />
