@@ -66,10 +66,12 @@ export function AdminSidebar({ currentPath = "/admin/dashboard", onClose }: Admi
     });
   const mobilePrimary = isPlatform
     ? toMobile(["Tenants", "Settings"])
-    : toMobile(["Dashboard", "Policies", "Agents", "Reports"]);
+    : toMobile(["Dashboard", "Sold Policies", "Agents", "Reports"]).map((item) =>
+        item.label === "Sold Policies" ? { ...item, label: "Sold" } : item,
+      );
   const mobileMore = isPlatform
     ? []
-    : toMobile(["Customers", "Catalog", "Sold Policies", "Settings"]);
+    : toMobile(["Customers", "Policies", "Catalog", "Settings"]);
 
   const renderContent = (compact: boolean) => (
     <div className="flex h-full flex-col justify-between overflow-x-hidden bg-background text-foreground border-r border-border/80">

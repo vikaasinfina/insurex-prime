@@ -164,7 +164,6 @@ export function AgentSidebar({ currentPath, isOpen, onClose }: AgentSidebarProps
         primary={[
           { label: "Home", icon: LayoutDashboard, href: "/agent/dashboard" },
           { label: "Customers", icon: Users, href: "/agent/customers" },
-          { label: "Policies", icon: Shield, href: "/agent/policies" },
           {
             label: "Sold",
             icon: ShoppingBag,
@@ -173,7 +172,10 @@ export function AgentSidebar({ currentPath, isOpen, onClose }: AgentSidebarProps
             alsoActiveFor: ["/agent/sell-policy"],
           },
         ]}
-        more={[{ label: "Profile", icon: UserRound, href: "/agent/profile" }]}
+        more={[
+          { label: "Policies", icon: Shield, href: "/agent/policies" },
+          { label: "Profile", icon: UserRound, href: "/agent/profile" },
+        ]}
         account={{ name: agent.fullName, role: `Agent · ${agent.agentCode}` }}
         onLogout={() => void handleLogout()}
         isLoggingOut={isLoggingOut}
