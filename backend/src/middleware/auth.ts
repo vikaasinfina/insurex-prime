@@ -1,10 +1,10 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
 import { TokenVerificationError, type TokenVerifier } from "../config/firebase.js";
 import type { Database } from "../config/database.js";
 import { scopeToTenant } from "../config/tenant-db.js";
 import type { Role } from "../generated/prisma/enums.js";
-import { hashSessionToken, readSessionCookie } from "../modules/auth/agent-session.js";
+import { hashSessionToken, readSessionCookie, setSessionCookie } from "../modules/auth/agent-session.js";
 import {
   assertCanSignIn,
   resolveUserForIdentity,
@@ -32,7 +32,7 @@ export interface AuthContext {
 declare module "fastify" {
   interface FastifyInstance {
     tokenVerifier: TokenVerifier;
-    authenticate: (request: FastifyRequest) => Promise<void>;
+    authenticate: (request: FastifyRequest, reply?: FastifyReply) => Promise<void>;
   }
   interface FastifyRequest {
     auth: AuthContext | null;
@@ -106,7 +106,11 @@ export const authPlugin = fp(
       return tenantId;
     }
 
-    async function authenticateSession(request: FastifyRequest, token: string) {
+    async function authenticateSession(
+      request: FastifyRequest,
+      reply: FastifyReply | undefined,
+      token: string,
+    ) {
       assertTrustedOrigin(app, request);
       const session = await app.db.agentSession.findUnique({
         where: { tokenHash: hashSessionToken(token) },
@@ -122,10 +126,16 @@ export const authPlugin = fp(
       assertCanSignIn(user);
 
       if (Date.now() - session.lastSeenAt.getTime() > LAST_SEEN_RESOLUTION_MS) {
+        // Sliding session: every active day pushes expiry out by a full TTL again.
+        const ttlHours = app.config.AGENT_SESSION_TTL_HOURS;
         await app.db.agentSession.update({
           where: { id: session.id },
-          data: { lastSeenAt: new Date() },
+          data: {
+            lastSeenAt: new Date(),
+            expiresAt: new Date(Date.now() + ttlHours * 3_600_000),
+          },
         });
+        if (reply) setSessionCookie(reply, app.config, token);
       }
 
       request.auth = {
@@ -186,12 +196,12 @@ export const authPlugin = fp(
       };
     }
 
-    app.decorate("authenticate", async (request: FastifyRequest) => {
+    app.decorate("authenticate", async (request: FastifyRequest, reply?: FastifyReply) => {
       const header = request.headers.authorization;
       if (header) return authenticateFirebase(request, extractBearerToken(header));
 
       const sessionToken = readSessionCookie(request);
-      if (sessionToken) return authenticateSession(request, sessionToken);
+      if (sessionToken) return authenticateSession(request, reply, sessionToken);
 
       throw unauthenticated();
     });

@@ -64,6 +64,8 @@ export const getAdminSession = createServerFn({ method: "GET" }).handler(async (
     if (session.data.role !== "super_admin" || !email || !isAuthorizedAdminEmail(email)) {
       return null;
     }
+    // Sliding session: each visit renews the cookie for another full lifetime.
+    await updateSession<AdminSessionData>(config, { ...session.data }).catch(() => undefined);
     return { email };
   } catch {
     return null;
