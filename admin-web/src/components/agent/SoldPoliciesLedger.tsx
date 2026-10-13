@@ -53,6 +53,16 @@ function PolicyAgeBadge({ inceptionDate }: { inceptionDate: string }) {
   );
 }
 
+export type ExpiryFilter = "" | "ACTIVE" | "EXPIRING" | "EXPIRED" | "COMPLETED";
+
+const expiryFilterLabel: Record<ExpiryFilter, string> = {
+  "": "All status",
+  ACTIVE: "Active",
+  EXPIRING: "Expiring soon",
+  EXPIRED: "Expired",
+  COMPLETED: "Completed",
+};
+
 interface LedgerProps {
   /** Admins see every agent's sales (with an Agent column and filter); agents only their own. */
   adminMode?: boolean;
@@ -67,6 +77,11 @@ interface LedgerProps {
   actions: ReactNode;
   /** Shown in the empty state when no sale exists yet. */
   emptyAction: ReactNode;
+  /** Rows per page (default 10). */
+  pageSize?: number;
+  /** Status filter. Pass both to drive it from outside (e.g. dashboard KPI cards). */
+  expiry?: ExpiryFilter;
+  onExpiryChange?: (expiry: ExpiryFilter) => void;
 }
 
 /** The sold-policies table shared by the agent workspace and the admin ledger. */
@@ -80,8 +95,14 @@ export function SoldPoliciesLedger({
   onReset,
   actions,
   emptyAction,
+  pageSize = PAGE_SIZE,
+  expiry: controlledExpiry,
+  onExpiryChange,
 }: LedgerProps) {
   const [search, setSearch] = useState(initialSearch ?? "");
+  const [ownExpiry, setOwnExpiry] = useState<ExpiryFilter>("");
+  const expiry = controlledExpiry ?? ownExpiry;
+  const setExpiry = onExpiryChange ?? setOwnExpiry;
   const [agentId, setAgentId] = useState("");
   const agents = useQuery({
     queryKey: [...adminKeys.agents, "ledger-filter"],
@@ -99,12 +120,22 @@ export function SoldPoliciesLedger({
   const [deleteSale, setDeleteSale] = useState<ApiSoldPolicy | null>(null);
 
   const rangeInvalid = Boolean(from && to && from > to);
-  useEffect(() => setPage(1), [debouncedSearch, insuranceType, from, to, sort, agentId]);
+  useEffect(
+    () => setPage(1),
+    [debouncedSearch, insuranceType, from, to, sort, agentId, expiry, pageSize],
+  );
+  // Soonest expiry first for "Expiring soon", most recently lapsed first for "Expired".
+  useEffect(() => {
+    if (expiry === "EXPIRING") setSort("expiryDate:asc");
+    else if (expiry === "EXPIRED") setSort("expiryDate:desc");
+    else setSort((current) => (current.startsWith("expiryDate") ? "issueDate:desc" : current));
+  }, [expiry]);
 
   const [sortBy, order] = sort.split(":") as [SortKey, "asc" | "desc"];
   const listParams = {
     page,
-    limit: PAGE_SIZE,
+    limit: pageSize,
+    expiry: expiry || undefined,
     search: debouncedSearch || undefined,
     insuranceType: insuranceType || undefined,
     agentId: adminMode ? agentId || undefined : undefined,
@@ -120,7 +151,9 @@ export function SoldPoliciesLedger({
     retry: retryUnlessClientError,
   });
   const rows = sold.data?.data ?? [];
-  const filtersActive = Boolean(debouncedSearch || insuranceType || from || to || agentId);
+  const filtersActive = Boolean(
+    debouncedSearch || insuranceType || from || to || agentId || expiry,
+  );
 
   const resetFilters = () => {
     setSearch("");
@@ -129,6 +162,7 @@ export function SoldPoliciesLedger({
     setTo("");
     setSort("issueDate:desc");
     setAgentId("");
+    setExpiry("");
     onReset?.();
   };
 
@@ -157,6 +191,17 @@ export function SoldPoliciesLedger({
             <option value="MOTOR">Motor</option>
             <option value="LIFE">Life</option>
             <option value="COMMERCIAL">Commercial</option>
+          </NativeSelect>
+          <NativeSelect
+            value={expiry}
+            onChange={(event) => setExpiry(event.target.value as ExpiryFilter)}
+            aria-label="Status"
+          >
+            {(Object.keys(expiryFilterLabel) as ExpiryFilter[]).map((key) => (
+              <option key={key || "all"} value={key}>
+                {expiryFilterLabel[key]}
+              </option>
+            ))}
           </NativeSelect>
           {adminMode && (
             <NativeSelect
@@ -197,6 +242,7 @@ export function SoldPoliciesLedger({
             <option value="issueDate:desc">Newest issued</option>
             <option value="issueDate:asc">Oldest issued</option>
             <option value="expiryDate:asc">Expiring first</option>
+            <option value="expiryDate:desc">Latest expiry first</option>
             <option value="premium:desc">Highest premium</option>
             <option value="premium:asc">Lowest premium</option>
           </NativeSelect>

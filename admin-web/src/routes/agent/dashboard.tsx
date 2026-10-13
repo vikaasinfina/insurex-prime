@@ -1,4 +1,3 @@
-import { expiryStatus } from "@/lib/expiry-status";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -6,13 +5,9 @@ import {
   ArrowRight,
   CalendarClock,
   CheckCircle2,
-  Eye,
   FilePlus2,
   IndianRupee,
-  RotateCcw,
-  Search,
   Shield,
-  ShieldCheck,
   ShoppingBag,
   UserPlus,
   Users,
@@ -24,30 +19,20 @@ import {
   PolicyDistributionChart,
   SalesOverviewChart,
 } from "@/components/agent/AgentDashboardCharts";
-import { SoldPolicyDialog } from "@/components/agent/SoldPolicyDialog";
+import { SoldPoliciesLedger, type ExpiryFilter } from "@/components/agent/SoldPoliciesLedger";
 import { useAgentSession } from "@/components/agent/agent-session-context";
 import {
-  CodeChip,
   CustomerStatusBadge,
   EmptyState,
   ErrorState,
-  InsuranceTypeBadge,
-  NativeSelect,
-  SaleStatusBadge,
   SectionCard,
-  TableScroller,
-  tdClass,
-  thClass,
 } from "@/components/agent/agent-ui";
-import { SaleTypeBadge } from "@/components/SaleTypeBadge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { Skeleton } from "@/components/ui/skeleton";
-import { agentApi, retryUnlessClientError, soldPoliciesApi, type AgentDashboard } from "@/lib/api";
+import { agentApi, retryUnlessClientError, type AgentDashboard } from "@/lib/api";
 import type { AgentDashboardRange } from "@/lib/api/types";
 import { agentKeys } from "@/lib/agent-queries";
-import { daysUntil, formatDate, formatINR, formatNumber } from "@/lib/format";
+import { formatDate, formatINR, formatNumber } from "@/lib/format";
 
 export const Route = createFileRoute("/agent/dashboard")({
   head: () => ({ meta: [{ title: "Agent Dashboard — InsuroX Prime" }] }),
@@ -108,14 +93,7 @@ function KpiCard({
   );
 }
 
-type SaleFilter = "" | "ACTIVE" | "EXPIRING" | "EXPIRED";
-
-const saleFilterLabel: Record<SaleFilter, string> = {
-  "": "All status",
-  ACTIVE: "Active",
-  EXPIRING: "Expiring soon",
-  EXPIRED: "Expired",
-};
+type SaleFilter = ExpiryFilter;
 
 function KpiGrid({
   summary,
@@ -298,60 +276,24 @@ const RANGE_PILLS: [AgentDashboardRange, string][] = [
   ["1Y", "1 Year"],
 ];
 
-const EXPIRY_WARNING_DAYS = 30;
-
-/** Red "(18 days)" only while cover ends in fewer than 30 days; otherwise nothing. */
-function DaysRemaining({ expiryDate }: { expiryDate: string }) {
-  const days = daysUntil(expiryDate);
-  if (days < 0 || days >= EXPIRY_WARNING_DAYS) return null;
-  return (
-    <span className="font-bold text-destructive">
-      {" "}
-      ({days === 0 ? "today" : `${days} ${days === 1 ? "day" : "days"}`})
-    </span>
-  );
-}
-
+/** Recent sales: the same table as Sold Policies, filtered by the KPI cards or its own status filter. */
 function RecentSales({
-  sales: recentSales,
   filter,
   onFilterChange,
-  onView,
 }: {
-  sales: AgentDashboard["recentSales"];
   filter: SaleFilter;
   onFilterChange: (filter: SaleFilter) => void;
-  onView: (id: string) => void;
 }) {
-  const [search, setSearch] = useState("");
-  const debouncedSearch = useDebouncedValue(search.trim());
-  const filtering = Boolean(debouncedSearch || filter);
-  const listParams = {
-    limit: 20,
-    search: debouncedSearch || undefined,
-    expiry: filter || undefined,
-    // Most recently lapsed first; soonest expiry first; otherwise newest sale.
-    sortBy: filter === "EXPIRING" || filter === "EXPIRED" ? "expiryDate" : "issueDate",
-    order: filter === "EXPIRING" ? ("asc" as const) : ("desc" as const),
-  };
-  const filtered = useQuery({
-    queryKey: agentKeys.soldPolicies({ ...listParams, dashboardList: true }),
-    queryFn: () => soldPoliciesApi.list(listParams),
-    enabled: filtering,
-    placeholderData: keepPreviousData,
-    retry: retryUnlessClientError,
-  });
-  const sales = filtering ? (filtered.data?.data ?? []) : recentSales;
-
+  const [viewId, setViewId] = useState<string | null>(null);
   return (
-    <SectionCard
+    <SoldPoliciesLedger
       title="Recent Policy Sales"
-      icon={ShieldCheck}
-      description={
-        filtering
-          ? `${filtered.data?.meta.total ?? "…"} matching ${filtered.data?.meta.total === 1 ? "sale" : "sales"}`
-          : "Your latest policy sales"
-      }
+      description="Your latest policy sales"
+      pageSize={5}
+      expiry={filter}
+      onExpiryChange={onFilterChange}
+      viewId={viewId}
+      onViewChange={(id) => setViewId(id ?? null)}
       actions={
         <Link
           to="/agent/sold-policies"
@@ -360,207 +302,14 @@ function RecentSales({
           View all sales <ArrowRight className="size-3.5" />
         </Link>
       }
-    >
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative min-w-52 flex-1 sm:max-w-sm">
-          <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
-          <Input
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search by customer, policy or number"
-            aria-label="Search recent sales"
-            className="h-9 rounded-xl pl-9 text-xs"
-          />
-        </div>
-        <NativeSelect
-          value={filter}
-          onChange={(event) => onFilterChange(event.target.value as SaleFilter)}
-          aria-label="Filter by status"
-        >
-          {(Object.keys(saleFilterLabel) as SaleFilter[]).map((key) => (
-            <option key={key || "all"} value={key}>
-              {saleFilterLabel[key]}
-            </option>
-          ))}
-        </NativeSelect>
-        {filtering && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="rounded-lg text-xs"
-            onClick={() => {
-              setSearch("");
-              onFilterChange("");
-            }}
-          >
-            <RotateCcw /> Reset
-          </Button>
-        )}
-      </div>
-
-      {filtering && filtered.isLoading ? (
-        <Skeleton className="h-40 rounded-xl" />
-      ) : filtering && sales.length === 0 ? (
-        <EmptyState
-          icon={Search}
-          title="No sales match these filters"
-          description="Try a different name or status."
-        />
-      ) : sales.length === 0 ? (
-        <EmptyState
-          icon={ShoppingBag}
-          title="No policies recorded yet"
-          description="Record your first offline sale — it will show up here straight away."
-          action={
-            <Button asChild className="rounded-xl">
-              <Link to="/agent/sell-policy">
-                <FilePlus2 /> Record your first sold policy
-              </Link>
-            </Button>
-          }
-        />
-      ) : (
-        <>
-          <ul className="space-y-2 md:hidden">
-            {sales.map((sale) => (
-              <li key={sale.id}>
-                <button
-                  type="button"
-                  onClick={() => onView(sale.id)}
-                  className="flex w-full flex-col gap-2.5 rounded-lg bg-surface/60 p-3 text-left active:bg-muted"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
-                        <ShieldCheck className="size-5" />
-                      </span>
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                          <span className="max-w-full truncate font-mono text-[11px] font-bold">
-                            {sale.policyNumber}
-                          </span>
-                          <SaleTypeBadge renewal={sale.isRenewal} />
-                          <SaleStatusBadge
-                            status={sale.policyStatus}
-                            expiryDate={sale.expiryDate}
-                            renewed={sale.isRenewed}
-                            completed={sale.isCompleted}
-                          />
-                        </div>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {sale.policy.policyName}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className="font-display text-[15px] font-extrabold">
-                        {formatINR(sale.premium)}
-                      </p>
-                      <p className="text-[10px] font-bold text-muted-foreground">Premium</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between border-t border-border/60 pt-2 text-xs text-muted-foreground">
-                    <span className="truncate">
-                      {sale.customer.fullName} · {formatDate(sale.issueDate)}
-                    </span>
-                    <span className="flex shrink-0 items-center gap-1 font-bold text-primary">
-                      <Eye className="size-3.5" /> View
-                    </span>
-                  </div>
-                </button>
-              </li>
-            ))}
-          </ul>
-          <div className="hidden md:block">
-            <TableScroller>
-              <thead>
-                <tr className="border-b border-border/70">
-                  {[
-                    "Policy Number",
-                    "Customer",
-                    "Policy",
-                    "Insurance Type",
-                    "Premium",
-                    "Issue Date",
-                    "Expiry Date",
-                    "Status",
-                    "Actions",
-                  ].map((heading) => (
-                    <th
-                      key={heading}
-                      className={`${thClass} ${heading === "Premium" ? "text-right" : ""} ${heading === "Actions" ? "text-right" : ""}`}
-                    >
-                      {heading}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50 font-medium">
-                {sales.map((sale) => (
-                  <tr
-                    key={sale.id}
-                    className={`transition-colors hover:bg-muted/40 ${expiryStatus(sale.expiryDate, sale.isRenewed, sale.isCompleted).row}`}
-                  >
-                    <td className={tdClass}>
-                      <CodeChip>{sale.policyNumber}</CodeChip>
-                    </td>
-                    <td className={`${tdClass} font-bold text-foreground`}>
-                      <p className="whitespace-nowrap">{sale.customer.fullName}</p>
-                      <p className="font-mono text-[11px] font-normal text-muted-foreground">
-                        {sale.customer.customerCode}
-                      </p>
-                    </td>
-                    <td className={`${tdClass} text-foreground`}>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {sale.policy.policyName}
-                        <SaleTypeBadge renewal={sale.isRenewal} />
-                      </div>
-                    </td>
-                    <td className={tdClass}>
-                      <InsuranceTypeBadge type={sale.policy.insuranceType} />
-                    </td>
-                    <td
-                      className={`${tdClass} whitespace-nowrap text-right font-display font-extrabold`}
-                    >
-                      {formatINR(sale.premium)}
-                    </td>
-                    <td className={`${tdClass} whitespace-nowrap text-muted-foreground`}>
-                      {formatDate(sale.issueDate)}
-                    </td>
-                    <td className={`${tdClass} whitespace-nowrap text-muted-foreground`}>
-                      {formatDate(sale.expiryDate)}
-                      <DaysRemaining expiryDate={sale.expiryDate} />
-                    </td>
-                    <td className={tdClass}>
-                      <SaleStatusBadge
-                        status={sale.policyStatus}
-                        expiryDate={sale.expiryDate}
-                        renewed={sale.isRenewed}
-                        completed={sale.isCompleted}
-                      />
-                    </td>
-                    <td className={`${tdClass} text-right`}>
-                      <div className="flex justify-end gap-1.5">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 rounded-lg px-2 text-xs"
-                          onClick={() => onView(sale.id)}
-                        >
-                          <Eye /> View
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </TableScroller>
-          </div>
-        </>
-      )}
-    </SectionCard>
+      emptyAction={
+        <Button asChild className="rounded-xl">
+          <Link to="/agent/sell-policy">
+            <FilePlus2 /> Record your first sold policy
+          </Link>
+        </Button>
+      }
+    />
   );
 }
 
@@ -642,7 +391,6 @@ function AgentDashboardPage() {
   const { agent } = useAgentSession();
   const navigate = useNavigate();
   const [range, setRange] = useState<AgentDashboardRange>("30D");
-  const [viewSaleId, setViewSaleId] = useState<string | null>(null);
   const [saleFilter, setSaleFilter] = useState<SaleFilter>("");
   const salesRef = useRef<HTMLDivElement>(null);
   const filterSales = (next: SaleFilter) => {
@@ -734,12 +482,7 @@ function AgentDashboardPage() {
           </div>
 
           <div ref={salesRef} className="scroll-mt-20 max-lg:order-5">
-            <RecentSales
-              sales={data.recentSales}
-              filter={saleFilter}
-              onFilterChange={setSaleFilter}
-              onView={setViewSaleId}
-            />
+            <RecentSales filter={saleFilter} onFilterChange={setSaleFilter} />
           </div>
 
           <div className="grid grid-cols-1 gap-6 max-lg:order-6 lg:grid-cols-3">
@@ -752,8 +495,6 @@ function AgentDashboardPage() {
           </div>
         </>
       )}
-
-      <SoldPolicyDialog soldPolicyId={viewSaleId} onClose={() => setViewSaleId(null)} />
     </>
   );
 }
