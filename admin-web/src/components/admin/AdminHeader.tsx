@@ -1,4 +1,9 @@
 import { Link, useRouterState } from "@tanstack/react-router";
+import {
+  UpcomingMeetingsList,
+  useMeetingNotifications,
+} from "@/components/calendar/UpcomingMeetings";
+import { NotificationsHeader } from "@/components/NotificationsHeader";
 import { useAutoPushAlerts } from "@/components/pwa/pwa";
 import { Bell, CheckCircle2, Menu, Shield } from "lucide-react";
 import { useState } from "react";
@@ -49,10 +54,12 @@ export function AdminHeader({ onToggleSidebar }: AdminHeaderProps) {
     .map((part) => part[0]!.toUpperCase())
     .join("");
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
-  const unreadCount = notifications.filter((n) => n.unread).length;
+  const meetings = useMeetingNotifications("admin");
+  const unreadCount = notifications.filter((n) => n.unread).length + meetings.unread;
 
   const handleMarkAllRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
+    meetings.state.markRead(meetings.ids);
     toast.success("All notifications marked as read");
   };
 
@@ -69,30 +76,21 @@ export function AdminHeader({ onToggleSidebar }: AdminHeaderProps) {
             )}
           </button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-80 p-0 rounded-2xl shadow-nav border-border">
-          <div className="flex items-center justify-between border-b border-border p-3.5">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-xs">Notifications</span>
-              {unreadCount > 0 && (
-                <span className="rounded-full bg-signal/20 px-2 py-0.5 text-[10px] font-bold text-foreground">
-                  {unreadCount} new
-                </span>
-              )}
-            </div>
-            {unreadCount > 0 && (
-              <button
-                type="button"
-                onClick={handleMarkAllRead}
-                className="text-[11px] font-medium text-primary hover:underline cursor-pointer"
-              >
-                Mark all read
-              </button>
-            )}
-          </div>
+        <PopoverContent
+          align="end"
+          collisionPadding={16}
+          className="w-[calc(100vw-2rem)] sm:w-80 p-0 rounded-2xl shadow-nav border-border"
+        >
+          <NotificationsHeader unread={unreadCount} onMarkAllRead={handleMarkAllRead} />
           <div className="divide-y divide-border/60 max-h-72 overflow-y-auto">
-            {notifications.length === 0 && (
+            {notifications.length === 0 && meetings.visible.length === 0 && (
               <p className="p-4 text-center text-xs text-muted-foreground">No notifications yet</p>
             )}
+            <UpcomingMeetingsList
+              scope="admin"
+              meetings={meetings.visible}
+              state={meetings.state}
+            />
             {notifications.map((notif) => (
               <div
                 key={notif.id}
@@ -174,32 +172,23 @@ export function AdminHeader({ onToggleSidebar }: AdminHeaderProps) {
                 )}
               </button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-80 p-0 rounded-2xl shadow-nav border-border">
-              <div className="flex items-center justify-between border-b border-border p-3.5">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-xs">Notifications</span>
-                  {unreadCount > 0 && (
-                    <span className="rounded-full bg-signal/20 px-2 py-0.5 text-[10px] font-bold text-foreground">
-                      {unreadCount} new
-                    </span>
-                  )}
-                </div>
-                {unreadCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleMarkAllRead}
-                    className="text-[11px] font-medium text-primary hover:underline cursor-pointer"
-                  >
-                    Mark all read
-                  </button>
-                )}
-              </div>
+            <PopoverContent
+              align="end"
+              collisionPadding={16}
+              className="w-[calc(100vw-2rem)] sm:w-80 p-0 rounded-2xl shadow-nav border-border"
+            >
+              <NotificationsHeader unread={unreadCount} onMarkAllRead={handleMarkAllRead} />
               <div className="divide-y divide-border/60 max-h-72 overflow-y-auto">
-                {notifications.length === 0 && (
+                {notifications.length === 0 && meetings.visible.length === 0 && (
                   <p className="p-4 text-center text-xs text-muted-foreground">
                     No notifications yet
                   </p>
                 )}
+                <UpcomingMeetingsList
+                  scope="admin"
+                  meetings={meetings.visible}
+                  state={meetings.state}
+                />
                 {notifications.map((notif) => (
                   <div
                     key={notif.id}

@@ -216,7 +216,7 @@ function AgentProfilePage() {
               />
             </div>
           </div>
-          <div className="sm:ml-auto">
+          <div className="w-full border-t border-border/60 pt-3 sm:w-auto sm:border-0 sm:pt-0 sm:ml-auto">
             <PushToggle />
           </div>
         </div>
