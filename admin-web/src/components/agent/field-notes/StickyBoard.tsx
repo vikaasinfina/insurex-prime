@@ -28,7 +28,6 @@ import {
 } from "../field-notes-data";
 import { useNoteActions } from "./note-actions";
 import { agendaBuckets, noteStage, noteStageLabel, type NoteStage } from "./follow-up-groups";
-import { MeetingsAgenda } from "./MeetingsAgenda";
 import { categoryIcon, categoryLabel, paletteFor, tapeTilt } from "./note-theme";
 
 export type NoteStatusFilter = "all" | NoteStage;
@@ -100,7 +99,7 @@ export function StickyBoard({
         </span>
       </div>
 
-      <div className="grid items-start gap-3 lg:grid-cols-2 lg:gap-5">
+      <div className="grid items-start gap-3 lg:gap-5">
         {/* Quick Memo Mode banner */}
         <div
           role="button"
@@ -138,8 +137,6 @@ export function StickyBoard({
             Record <ArrowRight className="size-4" />
           </span>
         </div>
-
-        <MeetingsAgenda notes={notes} onReschedule={onReschedule} />
       </div>
 
       {/* Title, view toggle and filters */}

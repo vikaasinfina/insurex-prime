@@ -5,6 +5,7 @@ import {
   LoginAttemptLimiter,
   parseAgentIdentifier,
 } from "../src/modules/auth/agent-login.service.js";
+import { toSecondPerson } from "../src/modules/field-notes/memo-parser.service.js";
 import { hashSessionToken, readSessionCookie } from "../src/modules/auth/agent-session.js";
 import {
   generateDefaultAgentPassword,
@@ -167,5 +168,20 @@ describe("agent password sign-in", () => {
       loadEnv({ ...baseEnv, AGENT_COOKIE_SAMESITE: "none", AGENT_COOKIE_SECURE: "true" })
         .AGENT_COOKIE_SAMESITE,
     ).toBe("none");
+  });
+});
+
+describe("toSecondPerson", () => {
+  it("rewrites third-person agent wording as 'You'", () => {
+    expect(
+      toSecondPerson("The agent had a long discussion with Campas Sir from 8:00 PM to 10:00 PM."),
+    ).toBe("You had a long discussion with Campas Sir from 8:00 PM to 10:00 PM.");
+    expect(toSecondPerson("The agent was told to call back. The agent's visit is on Monday.")).toBe(
+      "You were told to call back. Your visit is on Monday.",
+    );
+    expect(toSecondPerson("Client said the agent isn't needed.")).toBe(
+      "Client said you aren't needed.",
+    );
+    expect(toSecondPerson("You spoke to Kamal.")).toBe("You spoke to Kamal.");
   });
 });

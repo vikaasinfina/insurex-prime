@@ -1,7 +1,7 @@
 import { Plus } from "lucide-react";
 import { useState } from "react";
 import { useFieldNotes, type FieldNote } from "@/components/agent/field-notes-data";
-import type { NoteStage } from "./follow-up-groups";
+import { noteStage, type NoteStage } from "./follow-up-groups";
 import { NoteFormDialog, type NoteDialogMode } from "./NoteFormDialog";
 import { QuickMemoDialog, type MemoPrefill } from "./QuickMemoDialog";
 import { NotesTable } from "./NotesTable";
@@ -9,7 +9,8 @@ import { StickyBoard, type NoteStatusFilter } from "./StickyBoard";
 
 export interface NotesSearch {
   view?: "table" | undefined;
-  status?: NoteStage | undefined;
+  /** Absent = the default view: notes due today when there are any, else all. */
+  status?: NoteStage | "all" | undefined;
   due?: "soon" | undefined;
 }
 
@@ -18,7 +19,12 @@ const statuses: NoteStage[] = ["scheduled", "today", "overdue", "logged", "compl
 /** Parses the page's URL search for the notes screen (shared by the agent and admin routes). */
 export const validateNotesSearch = (raw: Record<string, unknown>): NotesSearch => ({
   view: raw["view"] === "table" ? "table" : undefined,
-  status: statuses.includes(raw["status"] as NoteStage) ? (raw["status"] as NoteStage) : undefined,
+  status:
+    raw["status"] === "all"
+      ? "all"
+      : statuses.includes(raw["status"] as NoteStage)
+        ? (raw["status"] as NoteStage)
+        : undefined,
   due: raw["due"] === "soon" ? "soon" : undefined,
 });
 
@@ -43,10 +49,11 @@ export function FieldNotesPage({ search, onSearchChange }: FieldNotesPageProps) 
     setDialogOpen(true);
   };
 
-  const status: NoteStatusFilter = search.status ?? "all";
+  // Opens on "Due today" when something is due today; "All" is then an explicit choice.
+  const hasDueToday = notes.some((note) => noteStage(note) === "today");
+  const status: NoteStatusFilter = search.status ?? (hasDueToday ? "today" : "all");
   const setSearch = onSearchChange;
-  const setStatus = (value: NoteStatusFilter) =>
-    setSearch({ status: value === "all" ? undefined : value });
+  const setStatus = (value: NoteStatusFilter) => setSearch({ status: value });
 
   if (isPending) {
     return (

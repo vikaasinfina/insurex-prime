@@ -67,6 +67,33 @@ function localClock(nowIso: string, utcOffsetMinutes: number) {
   return `${weekday}, ${local.toISOString().slice(0, 10)} ${local.toISOString().slice(11, 16)}`;
 }
 
+const SECOND_PERSON_VERBS: Record<string, string> = {
+  was: "were",
+  wasn: "weren",
+  has: "have",
+  hasn: "haven",
+  is: "are",
+  isn: "aren",
+  does: "do",
+  doesn: "don",
+};
+
+/**
+ * The memo is the agent's own note, so it must read "You ..." and never "The agent ...".
+ * The prompt asks for this; this fixes any slip before the text reaches the form.
+ */
+export function toSecondPerson(text: string): string {
+  return text
+    .replace(/\b(?:the|this) agent['\u2019]s\b/gi, (m) => (/^[A-Z]/.test(m) ? "Your" : "your"))
+    .replace(/\b(?:the|this) agent\b(?:\s+(\w+?)(?=n['\u2019]t\b|\b))?/gi, (m, verb?: string) => {
+      const start = /^[A-Z]/.test(m) ? "You" : "you";
+      if (!verb) return start;
+      const fixed = SECOND_PERSON_VERBS[verb.toLowerCase()];
+      return fixed ? `${start} ${fixed}` : `${start} ${verb}`;
+    })
+    .replace(/(^|[.!?]\s+)you\b/g, (_m, lead: string) => `${lead}You`);
+}
+
 function buildPrompt(input: ParseMemoBody) {
   return `You turn an insurance agent's spoken or typed field note into a structured memo.
 The agent's current local date and time: ${localClock(input.now, input.utcOffsetMinutes)}.
@@ -77,7 +104,7 @@ Rules:
 - clientName: the customer or business the agent met or spoke to, as a proper name (title case). Empty string if none is named.
 - category: HEALTH, MOTOR, LIFE or COMMERCIAL (business/fleet/shop cover) — whichever the conversation was about; HEALTH if unclear.
 - coverage: the product discussed in a few words (e.g. "New health policy"), or empty.
-- note: a clear one or two sentence summary of what happened, written in third person past tense, keeping every concrete fact (amounts, names, conditions).
+- note: a clear one or two sentence summary of what happened, written to the agent in second person past tense ("You spoke to ...", "You had a long discussion with ..."), never "The agent ..." or "He/She". Keep every concrete fact (amounts, names, conditions).
 - followUpDate: a calendar date YYYY-MM-DD when a follow-up, callback, visit or decision is expected ("after two days", "next Monday", "tomorrow"), computed from the current date above. null if nothing is expected.
 - followUpTime: HH:MM (24h) only if a time of day was said, else null.
 - followUpLabel: what the follow-up is, 2-5 words (e.g. "Confirm health policy"). Empty if none.
@@ -162,7 +189,7 @@ export async function parseMemo(
       phone: ai.phone.trim(),
       coverage: ai.coverage.trim(),
       category: ai.category,
-      note: ai.note.trim() || input.text,
+      note: toSecondPerson(ai.note.trim()) || input.text,
       status: ai.completed ? "COMPLETED" : "IN_PROGRESS",
       followUpAt: future ? followUpAt : null,
       followUpLabel: future ? ai.followUpLabel.trim() : "",
@@ -254,7 +281,7 @@ ${JSON.stringify(current, null, 1)}
 Instruction from the agent: """${input.instruction}"""
 
 Return the COMPLETE updated memo. Change only what the instruction implies and keep every other field exactly as it is.
-- note: a concise one to three sentence third-person summary. Keep the earlier facts, add the new information and any reason given (for example why a meeting was postponed), and never repeat yourself. If the memo is empty, write it from the instruction.
+- note: a concise one to three sentence summary written to the agent in second person ("You ..."), never "The agent ..." (rewrite any earlier "The agent" wording as "You"). Keep the earlier facts, add the new information and any reason given (for example why a meeting was postponed), and never repeat yourself. If the memo is empty, write it from the instruction.
 - status: POSTPONED when the meeting or follow-up is postponed/rescheduled/delayed; COMPLETED when the matter is finished or the policy sold/issued; otherwise keep the current status.
 - followUpDate (YYYY-MM-DD) and followUpTime (HH:MM, 24h): always return the follow-up that should apply, even when unchanged. When the instruction postpones to a relative time ("next week", "after three days", "Friday"): if the memo already has a follow-up date in the future, move it from that date (for "next week" that is the same weekday and time, seven days later); otherwise count from today ("next week" = next Monday). Keep the existing time unless a new time is said. null only if there is no follow-up.
 - followUpLabel: 2-5 words; update only if the purpose of the follow-up changed.
@@ -308,7 +335,7 @@ export async function reviseMemo(
       phone: ai.phone.trim(),
       coverage: ai.coverage.trim(),
       category: ai.category,
-      note: ai.note.trim() || input.memo.note,
+      note: toSecondPerson(ai.note.trim()) || input.memo.note,
       status: ai.status,
       followUpAt: localToIso(ai.followUpDate, ai.followUpTime, input.utcOffsetMinutes),
       followUpLabel: ai.followUpLabel.trim(),

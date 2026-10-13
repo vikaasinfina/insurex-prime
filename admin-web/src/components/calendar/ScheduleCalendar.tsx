@@ -65,7 +65,7 @@ export interface ScheduleCalendarProps {
 }
 
 export function ScheduleCalendar({ scope, extraEvents = [] }: ScheduleCalendarProps) {
-  const [view, setView] = useState<CalendarView>("week");
+  const [view, setView] = useState<CalendarView>(scope === "agent" ? "day" : "week");
   const [anchor, setAnchor] = useState(() => startOfDay(new Date()));
   const [form, setForm] = useState<MeetingFormState | null>(null);
   const [selected, setSelected] = useState<CalendarEvent | null>(null);
