@@ -1,4 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
+import { useAutoPushAlerts } from "@/components/pwa/pwa";
 import { Bell, CheckCircle2, Menu, Shield } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -30,6 +31,7 @@ export interface AdminHeaderProps {
 
 export function AdminHeader({ onToggleSidebar }: AdminHeaderProps) {
   const { data: me } = useCurrentUser();
+  useAutoPushAlerts();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const pageTitle = PAGE_TITLES[pathname.replace(/\/$/, "")] ?? "Admin";
   const isTenantAdmin = me?.role === "TENANT_ADMIN";

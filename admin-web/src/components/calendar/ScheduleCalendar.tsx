@@ -1,6 +1,5 @@
 import { ChevronLeft, ChevronRight, ExternalLink, Plus, StickyNote, Video } from "lucide-react";
 import { useMemo, useState } from "react";
-import { PushToggle } from "@/components/pwa/pwa";
 import { Button } from "@/components/ui/button";
 import type { ApiMeeting } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -218,8 +217,6 @@ export function ScheduleCalendar({ scope, extraEvents = [] }: ScheduleCalendarPr
           </Button>
         </div>
       </section>
-
-      <PushToggle />
 
       <div className="flex flex-wrap gap-x-4 gap-y-1.5 px-1 text-xs font-medium text-muted-foreground">
         {(["meeting", "invite", "note", "done"] as const).map((tone) => (

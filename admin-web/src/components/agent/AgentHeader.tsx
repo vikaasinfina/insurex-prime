@@ -6,6 +6,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { MobileTopBar, mobileIconButton } from "@/components/mobile/MobileTopBar";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useAutoPushAlerts } from "@/components/pwa/pwa";
 import { agentApi, retryUnlessClientError } from "@/lib/api";
 import { agentKeys } from "@/lib/agent-queries";
 import { formatDate, initialsOf } from "@/lib/format";
@@ -94,6 +95,7 @@ export function AgentHeader({ title, subtitle, onToggleSidebar }: AgentHeaderPro
   const { agent, user, signOut } = useAgentSession();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
+  useAutoPushAlerts();
 
   const submitSearch = (event: FormEvent) => {
     event.preventDefault();

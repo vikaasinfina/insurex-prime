@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { ImagePlus, KeyRound, Loader2, Trash2, UserCircle } from "lucide-react";
+import { Bell, ImagePlus, KeyRound, Loader2, Trash2, UserCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { ChangePasswordForm } from "@/components/agent/ChangePasswordForm";
 import { SettingsSection } from "@/components/admin/settings/SettingsComponents";
+import { PushToggle } from "@/components/pwa/pwa";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,6 +36,7 @@ export const Route = createFileRoute("/admin/settings")({
 
 const SECTIONS = [
   { id: "profile", label: "Profile", icon: UserCircle },
+  { id: "alerts", label: "Phone alerts", icon: Bell },
   { id: "password", label: "Change password", icon: KeyRound },
 ] as const;
 type SectionId = (typeof SECTIONS)[number]["id"];
@@ -95,7 +97,9 @@ function AgencySettingsPage() {
               </ul>
             </nav>
             <div className="min-w-0">
-              {section === "profile" ? <ProfileSection /> : <PasswordSection />}
+              {section === "profile" && <ProfileSection />}
+              {section === "alerts" && <AlertsSection />}
+              {section === "password" && <PasswordSection />}
             </div>
           </div>
         </main>
@@ -300,6 +304,19 @@ function ProfileForm({
         </div>
       </SettingsSection>
     </form>
+  );
+}
+
+function AlertsSection() {
+  return (
+    <SettingsSection
+      title="Phone alerts"
+      description="Get a notification on this device when you're invited to a meeting, and 2 hours and 15 minutes before one starts, even when the app is closed."
+    >
+      <div className="flex flex-col gap-2 px-5 py-5 sm:px-6">
+        <PushToggle />
+      </div>
+    </SettingsSection>
   );
 }
 

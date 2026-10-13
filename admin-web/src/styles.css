@@ -809,3 +809,13 @@ label,
 summary {
   touch-action: manipulation;
 }
+
+/* iPhone zooms the whole page in when a field under 16px gets focus, and never zooms back out.
+   Keeping fields at 16px on phones stops that (the page then stays at its real width). */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

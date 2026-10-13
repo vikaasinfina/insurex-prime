@@ -11,6 +11,7 @@ import {
   SectionCard,
   StatusPill,
 } from "@/components/agent/agent-ui";
+import { PushToggle } from "@/components/pwa/pwa";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -199,11 +200,11 @@ function AgentProfilePage() {
           )
         }
       >
-        <div className="mb-5 flex items-center gap-4">
+        <div className="mb-5 flex flex-wrap items-center gap-4">
           <div className="grid size-16 shrink-0 place-items-center rounded-full bg-primary text-xl font-bold text-primary-foreground">
             {initialsOf(data.fullName)}
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="truncate font-display text-xl font-extrabold text-foreground">
               {data.fullName}
             </p>
@@ -214,6 +215,9 @@ function AgentProfilePage() {
                 label={data.status.charAt(0) + data.status.slice(1).toLowerCase()}
               />
             </div>
+          </div>
+          <div className="sm:ml-auto">
+            <PushToggle />
           </div>
         </div>
 
