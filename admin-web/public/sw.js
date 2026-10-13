@@ -77,3 +77,40 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(fetch(request).catch(() => caches.match(OFFLINE_URL)));
   }
 });
+
+// Phone alerts (Web Push): meeting invitations and "starts in 2 hours / 15 minutes" reminders.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: "InsuroX", body: event.data ? event.data.text() : "" };
+  }
+  const actions = data.joinUrl ? [{ action: "join", title: "Join meeting" }] : [];
+  event.waitUntil(
+    self.registration.showNotification(data.title || "InsuroX", {
+      body: data.body || "",
+      icon: "/pwa-192.png",
+      badge: "/pwa-192.png",
+      tag: data.tag,
+      renotify: Boolean(data.tag),
+      requireInteraction: Boolean(data.joinUrl),
+      data: { url: data.url || "/", joinUrl: data.joinUrl || "" },
+      actions,
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const { url, joinUrl } = event.notification.data || {};
+  // "Join meeting" goes straight to the call; tapping the message opens the schedule.
+  const target = event.action === "join" && joinUrl ? joinUrl : new URL(url || "/", self.location.origin).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      const sameApp = target.startsWith(self.location.origin) ? windows[0] : undefined;
+      if (sameApp && "navigate" in sameApp) return sameApp.navigate(target).then((client) => client && client.focus());
+      return self.clients.openWindow(target);
+    }),
+  );
+});

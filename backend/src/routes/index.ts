@@ -13,6 +13,7 @@ import { customerRoutes } from "../modules/customers/customers.routes.js";
 import { meetingRoutes } from "../modules/meetings/meetings.routes.js";
 import { platformRoutes } from "../modules/platform/platform.routes.js";
 import { policyRoutes } from "../modules/policies/policies.routes.js";
+import { pushRoutes } from "../modules/push/push.routes.js";
 import { receiptRoutes } from "../modules/receipts/receipts.routes.js";
 import { dashboardRoutes } from "../modules/reports/dashboard.routes.js";
 import { reportRoutes } from "../modules/reports/reports.routes.js";
@@ -40,6 +41,7 @@ export const registerRoutes: FastifyPluginAsyncZod = async (app) => {
   await app.register(fieldNoteRoutes, { prefix: "/field-notes" });
   await app.register(fieldNoteRoutes, { prefix: "/agent/field-notes" });
   await app.register(meetingRoutes, { prefix: "/meetings" });
+  await app.register(pushRoutes, { prefix: "/push" });
   await app.register(customerRoutes, { prefix: "/customers" });
   await app.register(policyRoutes, { prefix: "/policies" });
   await app.register(soldPolicyRoutes, { prefix: "/sold-policies" });

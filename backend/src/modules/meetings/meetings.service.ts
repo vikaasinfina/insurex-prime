@@ -6,6 +6,7 @@ import { isEmailConfigured, sendEmail } from "../../utils/email/send.js";
 import type { Prisma } from "../../generated/prisma/client.js";
 import type { AuthContext } from "../../middleware/auth.js";
 import { badRequest, forbidden, notFound } from "../../utils/errors.js";
+import { notifyMeetingInvited, reminderFlagsFor } from "./meeting-push.js";
 import type { CreateMeetingBody, UpdateMeetingBody } from "./meetings.schemas.js";
 
 const MAX_MEETINGS = 500;
@@ -186,10 +187,12 @@ export async function createMeeting(
       guestEmails: cleanGuests(body.guestEmails, accountEmails),
       startsAt: new Date(body.startsAt),
       endsAt: new Date(body.endsAt),
+      ...reminderFlagsFor(new Date(body.startsAt)),
       attendees: { create: userIds.map((userId) => ({ userId })) },
     },
     include: meetingInclude,
   });
+  await notifyMeetingInvited(db, mail.config, mail.logger, created);
   const tenant = await db.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
   const emails = await sendInvitations(mail.config, mail.logger, created, tenant?.name, body.timeZone);
   return { ...toMeetingDto(created, auth.userId), emails };
@@ -246,6 +249,8 @@ export async function updateMeeting(
         : {}),
       startsAt,
       endsAt,
+      // A moved meeting gets its reminders again.
+      ...(startsAt.getTime() !== existing.startsAt.getTime() ? reminderFlagsFor(startsAt) : {}),
       ...(userIds
         ? { attendees: { deleteMany: {}, create: userIds.map((userId) => ({ userId })) } }
         : {}),

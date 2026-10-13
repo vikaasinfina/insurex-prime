@@ -72,6 +72,11 @@ const envSchema = z
     NOTE_EMAIL_TIME_ZONE: z.string().trim().min(1).default("Asia/Kolkata"),
     // Set to "false" to turn off the background job that emails follow-up reminders.
     NOTE_REMINDERS: z.enum(["true", "false"]).default("true"),
+    // Phone alerts (Web Push) for meetings. Generate once with `npx web-push generate-vapid-keys`.
+    // Without both keys, alerts are switched off. VAPID_SUBJECT is a mailto: or https: contact.
+    VAPID_PUBLIC_KEY: optionalString,
+    VAPID_PRIVATE_KEY: optionalString,
+    VAPID_SUBJECT: z.string().trim().min(1).default("mailto:noreply@insurox.app"),
     // Signs password-reset links (HMAC). At least 32 characters; unset disables forgot-password.
     PASSWORD_RESET_SECRET: optionalString.refine(
       (value) => value === undefined || value.length >= 32,

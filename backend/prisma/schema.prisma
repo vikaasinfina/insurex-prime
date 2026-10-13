@@ -220,14 +220,15 @@ model User {
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
 
-  tenant            Tenant?           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant            Tenant?            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   agent             Agent?
   auditLogs         AuditLog[]
   agentSessions     AgentSession[]
   updatedSettings   SystemSetting[]
-  organizedMeetings Meeting[]         @relation("MeetingOrganizer")
+  organizedMeetings Meeting[]          @relation("MeetingOrganizer")
   meetingInvites    MeetingAttendee[]
   fieldNotes        FieldNote[]
+  pushSubscriptions PushSubscription[]
 
   @@index([role])
   @@index([tenantId, role])
@@ -461,19 +462,22 @@ model FieldNote {
 /// A scheduled meeting. An admin invites agents; an agent invites the agency's admins.
 /// Only the organizer can change or cancel it.
 model Meeting {
-  id          String   @id @default(uuid()) @db.Uuid
-  tenantId    String   @db.Uuid
-  organizerId String   @db.Uuid
-  title       String
-  description String   @default("")
+  id                 String    @id @default(uuid()) @db.Uuid
+  tenantId           String    @db.Uuid
+  organizerId        String    @db.Uuid
+  title              String
+  description        String    @default("")
   /// Google Meet / Zoom (or any https) join link.
-  meetingUrl  String   @default("")
+  meetingUrl         String    @default("")
   /// Outside guests (any email) invited alongside the agents/admins.
-  guestEmails String[] @default([])
-  startsAt    DateTime
-  endsAt      DateTime
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  guestEmails        String[]  @default([])
+  startsAt           DateTime
+  endsAt             DateTime
+  /// Set once the "starts in 2 hours" / "starts in 15 minutes" phone alerts went out.
+  pushedTwoHoursAt   DateTime?
+  pushedFifteenMinAt DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   organizer User              @relation("MeetingOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
@@ -481,6 +485,7 @@ model Meeting {
 
   @@index([tenantId, startsAt])
   @@index([organizerId, startsAt])
+  @@index([startsAt])
   @@map("meetings")
 }
 
@@ -494,6 +499,22 @@ model MeetingAttendee {
   @@id([meetingId, userId])
   @@index([userId])
   @@map("meeting_attendees")
+}
+
+/// One installed app / browser that agreed to receive phone alerts (Web Push).
+model PushSubscription {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }
 
 model AgentSession {

@@ -2,6 +2,7 @@ import { buildApp } from "./app.js";
 import { createDatabase } from "./config/database.js";
 import { EnvValidationError, loadEnv } from "./config/env.js";
 import { createFirebaseTokenVerifier } from "./config/firebase.js";
+import { startMeetingAlertJob } from "./modules/meetings/meeting-push.js";
 import { startReminderJob } from "./modules/field-notes/field-note-emails.js";
 
 async function main() {
@@ -35,6 +36,11 @@ async function main() {
   if (env.NOTE_REMINDERS === "true") {
     const stopReminders = startReminderJob(db, env, app.log);
     app.addHook("onClose", async () => stopReminders());
+  }
+
+  if (env.NOTE_REMINDERS === "true") {
+    const stopMeetingAlerts = startMeetingAlertJob(db, env, app.log);
+    app.addHook("onClose", async () => stopMeetingAlerts());
   }
 
   try {
