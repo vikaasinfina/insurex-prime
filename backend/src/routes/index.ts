@@ -36,6 +36,8 @@ export const registerRoutes: FastifyPluginAsyncZod = async (app) => {
   await app.register(agentRoutes, { prefix: "/agents" });
   await app.register(agentPortalRoutes, { prefix: "/agent" });
   await app.register(agentGoalRoutes, { prefix: "/agent/goals" });
+  // Agents and admins share the notes API; the /agent path stays for older frontends.
+  await app.register(fieldNoteRoutes, { prefix: "/field-notes" });
   await app.register(fieldNoteRoutes, { prefix: "/agent/field-notes" });
   await app.register(meetingRoutes, { prefix: "/meetings" });
   await app.register(customerRoutes, { prefix: "/customers" });

@@ -106,7 +106,7 @@ export function ScheduleCalendar({ scope, extraEvents = [] }: ScheduleCalendarPr
       <div key={dayKey(day)} className="flex min-w-0 flex-col gap-3">
         <div
           className={cn(
-            "flex items-center justify-between rounded-2xl border p-3.5",
+            "flex items-center justify-between gap-1 rounded-2xl border p-3.5 lg:p-2.5 2xl:p-3.5",
             isSameDay(day, today)
               ? "border-2 border-primary bg-primary/10"
               : "border-border bg-card",
@@ -121,12 +121,13 @@ export function ScheduleCalendar({ scope, extraEvents = [] }: ScheduleCalendarPr
                 </span>
               )}
             </div>
-            <div className="font-display text-base font-extrabold">
+            <div className="font-display text-base font-extrabold lg:text-sm 2xl:text-base">
               {formatDay(day, { day: "numeric", month: "short" })}
             </div>
           </div>
           <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
-            {list.length} {list.length === 1 ? "event" : "events"}
+            {list.length}
+            <span className="hidden 2xl:inline">{list.length === 1 ? " event" : " events"}</span>
           </span>
         </div>
 
@@ -218,10 +219,7 @@ export function ScheduleCalendar({ scope, extraEvents = [] }: ScheduleCalendarPr
       </section>
 
       <div className="flex flex-wrap gap-x-4 gap-y-1.5 px-1 text-xs font-medium text-muted-foreground">
-        {(scope === "agent"
-          ? (["meeting", "invite", "note", "done"] as const)
-          : (["meeting", "invite"] as const)
-        ).map((tone) => (
+        {(["meeting", "invite", "note", "done"] as const).map((tone) => (
           <span key={tone} className="inline-flex items-center gap-1.5">
             <span className={cn("size-2.5 rounded-full", toneStyle[tone].dot)} />
             {toneStyle[tone].label}
@@ -240,7 +238,7 @@ export function ScheduleCalendar({ scope, extraEvents = [] }: ScheduleCalendarPr
 
       {view === "week" && (
         <div
-          className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7"
+          className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-7 lg:gap-2 2xl:gap-3.5"
           aria-busy={meetings.isPending}
         >
           {days(7, from).map((day) => dayColumn(day, false))}
@@ -314,7 +312,7 @@ function EventCard({
       onClick={() => onOpen(event)}
       onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onOpen(event)}
       className={cn(
-        "cursor-pointer rounded-2xl border border-l-4 border-border bg-card p-3.5 shadow-sm transition-colors hover:bg-muted/40",
+        "cursor-pointer rounded-2xl border border-l-4 border-border bg-card p-3.5 shadow-sm transition-colors hover:bg-muted/40 lg:p-2.5 2xl:p-3.5",
         style.bar,
         event.tone === "done" && "opacity-70",
       )}
@@ -350,7 +348,8 @@ function EventCard({
           className="mt-2.5 inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
         >
           <Video className="size-3.5" />
-          {meetingLinkLabel(meeting.meetingUrl)}: Join
+          <span className="lg:max-2xl:hidden">{meetingLinkLabel(meeting.meetingUrl)}: </span>
+          Join
           <ExternalLink className="size-3" />
         </a>
       )}

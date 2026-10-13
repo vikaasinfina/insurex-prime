@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { CircleHelp, Plus, Sparkles, Target } from "lucide-react";
+import { CircleHelp, Pencil, Plus, Sparkles, Target } from "lucide-react";
 import { useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -194,14 +194,24 @@ function CategoryCard({
     <div className={cn(card, "gap-3 p-4")}>
       <div className="flex items-center justify-between gap-2">
         <p className="font-fo-display text-base font-semibold">{categoryLabel[category]}</p>
-        <span
-          className={cn(
-            "rounded-full px-2 py-0.5 text-xs font-semibold",
-            pace === "BEHIND" ? "bg-fo-error/10 text-fo-error" : "bg-fo-high text-fo-primary",
-          )}
-        >
-          {paceLabel[pace]}
-        </span>
+        <div className="flex items-center gap-2">
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 text-xs font-semibold",
+              pace === "BEHIND" ? "bg-fo-error/10 text-fo-error" : "bg-fo-high text-fo-primary",
+            )}
+          >
+            {paceLabel[pace]}
+          </span>
+          <button
+            type="button"
+            onClick={onSet}
+            aria-label={`Edit ${categoryLabel[category]} goal`}
+            className="grid size-7 cursor-pointer place-items-center rounded-md text-fo-muted hover:bg-fo-container hover:text-fo-primary"
+          >
+            <Pencil className="size-3.5" />
+          </button>
+        </div>
       </div>
       <div className="flex items-baseline justify-between gap-2">
         <span className="font-fo-display text-[26px] font-bold leading-8 text-fo-primary tabular-nums">
@@ -220,7 +230,10 @@ function CategoryCard({
         />
       </div>
       <div className="flex flex-wrap items-center justify-between gap-x-2 text-xs text-fo-muted">
-        <span>{remaining > 0 ? `${remaining} more to go` : "Goal achieved"}</span>
+        <span>
+          {remaining > 0 ? `${remaining} more to go` : "Goal achieved"}
+          {goal.derived && " · auto from weekly goal"}
+        </span>
         {goal.targetPremium > 0 && (
           <span className="tabular-nums">
             {formatINR(goal.closedPremium)} / {formatINR(goal.targetPremium)}

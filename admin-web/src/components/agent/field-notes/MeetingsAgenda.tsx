@@ -93,7 +93,10 @@ export function MeetingsAgenda({ notes, onReschedule }: MeetingsAgendaProps) {
       {rows.length === 0 ? (
         <p className="px-4 pb-5 pt-2 text-sm text-fo-muted">{emptyCopy[day]}</p>
       ) : (
-        <ul role="tabpanel" className="grid gap-2 p-3 pt-1 md:grid-cols-2 xl:grid-cols-3">
+        <ul
+          role="tabpanel"
+          className="grid gap-2 p-3 pt-1 md:grid-cols-2 lg:grid-cols-1 2xl:grid-cols-2"
+        >
           {rows.map((note) => {
             const Icon = categoryIcon[note.category];
             return (

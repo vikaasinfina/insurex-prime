@@ -437,8 +437,8 @@ function RecentSales({
                         <ShieldCheck className="size-5" />
                       </span>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="truncate font-mono text-[11px] font-bold">
+                        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                          <span className="max-w-full truncate font-mono text-[11px] font-bold">
                             {sale.policyNumber}
                           </span>
                           <SaleTypeBadge renewal={sale.isRenewal} />

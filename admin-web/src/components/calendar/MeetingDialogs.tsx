@@ -220,7 +220,7 @@ export function MeetingFormDialog({ scope, state, onClose }: MeetingFormDialogPr
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && !saving && onClose()}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="bottom-0 top-auto max-h-[92dvh] max-w-none translate-y-0 overflow-y-auto rounded-t-2xl pb-[max(1.5rem,env(safe-area-inset-bottom))] data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom sm:bottom-auto sm:top-[50%] sm:translate-y-[-50%] sm:rounded-xl sm:pb-6 sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{editing ? "Edit meeting" : "Schedule a meeting"}</DialogTitle>
           <DialogDescription>
@@ -243,8 +243,8 @@ export function MeetingFormDialog({ scope, state, onClose }: MeetingFormDialogPr
             />
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="space-y-1.5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="col-span-2 space-y-1.5 sm:col-span-1">
               <Label htmlFor="meeting-date">Date</Label>
               <Input
                 id="meeting-date"
@@ -463,7 +463,7 @@ export function EventDetailDialog({ scope, event, onClose, onEdit }: EventDetail
 
   return (
     <Dialog open={event !== null} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-md">
+      <DialogContent className="bottom-0 top-auto max-h-[92dvh] max-w-none translate-y-0 overflow-y-auto rounded-t-2xl pb-[max(1.5rem,env(safe-area-inset-bottom))] data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom sm:bottom-auto sm:top-[50%] sm:translate-y-[-50%] sm:rounded-xl sm:pb-6 sm:max-w-md">
         {event && (
           <>
             <DialogHeader>
@@ -539,7 +539,7 @@ export function EventDetailDialog({ scope, event, onClose, onEdit }: EventDetail
             <DialogFooter className="gap-2 sm:gap-2">
               {event.kind === "note" ? (
                 <Button asChild>
-                  <Link to="/agent/notes" onClick={onClose}>
+                  <Link to={scope === "admin" ? "/admin/notes" : "/agent/notes"} onClick={onClose}>
                     <StickyNote className="mr-2 size-4" /> Open field notes
                   </Link>
                 </Button>

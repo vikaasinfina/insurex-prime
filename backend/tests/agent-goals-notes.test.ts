@@ -110,6 +110,7 @@ describe.skipIf(!hasTestDatabase)("agent goals and field notes (PostgreSQL integ
         targetPremium: 0,
         soldPolicies: 0,
         closedPremium: 0,
+        derived: false,
       });
       expect((await call("GET", "/agent/goals", ADMIN)).status).toBe(403);
       expect((await call("GET", "/agent/goals", {})).status).toBe(401);
@@ -119,7 +120,26 @@ describe.skipIf(!hasTestDatabase)("agent goals and field notes (PostgreSQL integ
       const saved = await call("PUT", "/agent/goals/weekly", AGENT_A, targets);
       expect(saved.status).toBe(200);
       expect(saved.body.data.weekly.categories.motor).toMatchObject({ targetPolicies: 2 });
-      expect(saved.body.data.monthly.categories.motor.targetPolicies).toBe(0);
+      // Monthly, quarterly and yearly follow the weekly target until the agent saves their own.
+      expect(saved.body.data.monthly.categories.motor).toMatchObject({
+        targetPolicies: 8,
+        targetPremium: 100000,
+        derived: true,
+      });
+      expect(saved.body.data.quarterly.categories.motor.targetPolicies).toBe(26);
+      expect(saved.body.data.yearly.categories.motor.targetPolicies).toBe(104);
+      expect(saved.body.data.monthly.categories.life.derived).toBe(false);
+
+      const edited = await call("PUT", "/agent/goals/monthly", AGENT_A, {
+        ...targets,
+        motor: { targetPolicies: 10, targetPremium: 0 },
+      });
+      expect(edited.body.data.monthly.categories.motor).toMatchObject({
+        targetPolicies: 10,
+        derived: false,
+      });
+      // The other cadences still follow weekly.
+      expect(edited.body.data.quarterly.categories.motor.derived).toBe(true);
 
       const sale = await call("POST", "/sold-policies", AGENT_A, { policyId, customerId });
       expect(sale.status).toBe(201);
@@ -252,7 +272,7 @@ describe.skipIf(!hasTestDatabase)("agent goals and field notes (PostgreSQL integ
       expect(
         (await call("POST", "/agent/field-notes/parse", AGENT_A, { ...body, text: "hi" })).status,
       ).toBe(400);
-      expect((await call("POST", "/agent/field-notes/parse", ADMIN, body)).status).toBe(403);
+      expect((await call("POST", "/agent/field-notes/parse", ADMIN, body)).status).toBe(200);
       // Parsing never saves anything.
       expect((await call("GET", "/agent/field-notes", AGENT_A)).body.data).toHaveLength(0);
     });
@@ -298,17 +318,24 @@ describe.skipIf(!hasTestDatabase)("agent goals and field notes (PostgreSQL integ
           })
         ).status,
       ).toBe(400);
-      expect((await call("POST", "/agent/field-notes/revise", ADMIN, body)).status).toBe(403);
+      expect((await call("POST", "/agent/field-notes/revise", ADMIN, body)).status).toBe(200);
     });
 
-    it("keeps notes private between agents and blocks non-agents", async () => {
+    it("keeps notes private between agents and admins", async () => {
       const { id } = (await call("POST", "/agent/field-notes", AGENT_A, note)).body.data;
       expect((await call("GET", "/agent/field-notes", AGENT_B)).body.data).toHaveLength(0);
       expect(
         (await call("PATCH", `/agent/field-notes/${id}`, AGENT_B, { status: "COMPLETED" })).status,
       ).toBe(404);
       expect((await call("DELETE", `/agent/field-notes/${id}`, AGENT_B)).status).toBe(404);
-      expect((await call("GET", "/agent/field-notes", ADMIN)).status).toBe(403);
+      // An admin has their own notes and never sees an agent's (on either path).
+      expect((await call("GET", "/field-notes", ADMIN)).body.data).toHaveLength(0);
+      const mine = await call("POST", "/field-notes", ADMIN, { ...note, note: "Admin memo" });
+      expect(mine.status).toBe(201);
+      expect((await call("GET", "/field-notes", ADMIN)).body.data).toHaveLength(1);
+      expect((await call("GET", "/field-notes", AGENT_A)).body.data.map((n: { note: string }) => n.note)).not.toContain("Admin memo");
+      expect((await call("PATCH", `/field-notes/${id}`, ADMIN, { status: "COMPLETED" })).status).toBe(404);
+      expect((await call("GET", "/field-notes", {})).status).toBe(401);
       expect(
         (await call("POST", "/agent/field-notes", AGENT_A, { ...note, note: "" })).status,
       ).toBe(400);

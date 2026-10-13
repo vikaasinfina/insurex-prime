@@ -12,6 +12,7 @@ import {
   AgentSessionContext,
   type AgentSessionValue,
 } from "@/components/agent/agent-session-context";
+import { InstallPrompt } from "@/components/pwa/pwa";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 import {
@@ -230,6 +231,7 @@ function AgentLayout() {
     <AgentSessionContext.Provider value={session}>
       <div className="min-h-screen bg-surface/30 text-foreground selection:bg-primary/20 selection:text-primary">
         <Toaster position="top-right" richColors />
+        <InstallPrompt />
         <AgentSidebar
           currentPath={pathname}
           isOpen={sidebarOpen}

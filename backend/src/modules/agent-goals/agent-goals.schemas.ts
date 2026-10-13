@@ -10,6 +10,9 @@ const categoryGoalSchema = z.object({
   targetPremium: z.number(),
   soldPolicies: z.number().int(),
   closedPremium: z.number(),
+  derived: z
+    .boolean()
+    .describe("True when no target was saved for this period and it is the weekly target scaled up"),
 });
 
 const periodSchema = z.object({

@@ -280,7 +280,7 @@ export function InsuranceTypeBadge({ type }: { type: InsuranceType }) {
 
 export function CodeChip({ children }: { children: ReactNode }) {
   return (
-    <span className="whitespace-nowrap rounded-md border border-border/50 bg-surface/80 px-2 py-1 font-mono text-[11px] font-bold text-foreground">
+    <span className="min-w-0 max-w-full truncate whitespace-nowrap rounded-md border border-border/50 bg-surface/80 px-2 py-1 font-mono text-[11px] font-bold text-foreground">
       {children}
     </span>
   );

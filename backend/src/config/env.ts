@@ -68,6 +68,10 @@ const envSchema = z
     // Address meeting invitations are sent from (must be on a domain verified in Resend, e.g.
     // noreply@kempanna.com). The sender's name is shown as the display name. Defaults to RESEND_FROM_EMAIL.
     MEETING_FROM_EMAIL: optionalString,
+    // Zone follow-up times are shown in inside memo emails and reminders.
+    NOTE_EMAIL_TIME_ZONE: z.string().trim().min(1).default("Asia/Kolkata"),
+    // Set to "false" to turn off the background job that emails follow-up reminders.
+    NOTE_REMINDERS: z.enum(["true", "false"]).default("true"),
     // Signs password-reset links (HMAC). At least 32 characters; unset disables forgot-password.
     PASSWORD_RESET_SECRET: optionalString.refine(
       (value) => value === undefined || value.length >= 32,

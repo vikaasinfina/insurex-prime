@@ -12,7 +12,6 @@ import {
   ClipboardList,
   Clock,
   FilePenLine,
-  MapPin,
   Mic,
   Phone,
   StickyNote,
@@ -42,7 +41,6 @@ interface StickyBoardProps {
   onQuickMemo: () => void;
   onEdit: (note: FieldNote) => void;
   onReschedule: (note: FieldNote) => void;
-  territory: string;
 }
 
 export function StickyBoard({
@@ -53,7 +51,6 @@ export function StickyBoard({
   onQuickMemo,
   onEdit,
   onReschedule,
-  territory,
 }: StickyBoardProps) {
   const agenda = agendaBuckets(notes);
   const meetings = agenda.today.length + agenda.tomorrow.length;
@@ -103,7 +100,7 @@ export function StickyBoard({
         </span>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-2 lg:gap-5">
+      <div className="grid items-start gap-3 lg:grid-cols-2 lg:gap-5">
         {/* Quick Memo Mode banner */}
         <div
           role="button"
@@ -142,30 +139,8 @@ export function StickyBoard({
           </span>
         </div>
 
-        {/* Active territory */}
-        <div className="hero-field relative flex h-28 items-end overflow-hidden rounded-xl bg-[#1e3a5f] p-3 shadow-sm lg:h-auto lg:min-h-28 lg:p-5">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_10%,rgba(0,123,185,0.55),transparent_55%),radial-gradient(circle_at_10%_90%,rgba(163,103,0,0.35),transparent_50%)]" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0b1c30] via-[#0b1c30]/40 to-transparent" />
-          <div className="relative z-10 flex w-full items-center justify-between gap-2 text-white">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-fo-primary-container/80 backdrop-blur-sm">
-                <MapPin className="size-4" />
-              </span>
-              <div className="min-w-0">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-[#cce5ff]">
-                  Active Territory
-                </p>
-                <p className="line-clamp-2 text-sm font-bold">{territory}</p>
-              </div>
-            </div>
-            <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-bold backdrop-blur-md">
-              {pending} Visits Nearby
-            </span>
-          </div>
-        </div>
+        <MeetingsAgenda notes={notes} onReschedule={onReschedule} />
       </div>
-
-      <MeetingsAgenda notes={notes} onReschedule={onReschedule} />
 
       {/* Title, view toggle and filters */}
       <div className="flex flex-col gap-2.5 pt-2">

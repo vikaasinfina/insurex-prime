@@ -7,7 +7,7 @@ interface SpeechRecognitionLike {
   continuous: boolean;
   onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
   onend: (() => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
   start: () => void;
   stop: () => void;
 }
@@ -17,6 +17,37 @@ function getSpeechRecognition(): (new () => SpeechRecognitionLike) | null {
   const w = window as unknown as Record<string, unknown>;
   return (w["SpeechRecognition"] ?? w["webkitSpeechRecognition"] ?? null) as
     (new () => SpeechRecognitionLike) | null;
+}
+
+const ENABLE_MIC_STEPS =
+  "Tap the lock/tune icon next to the address bar → Permissions → Microphone → Allow. " +
+  "Or: phone Settings → Apps → your browser → Permissions → Microphone → Allow. Then tap Try again.";
+
+function showDictationError(code: string | undefined, retry: () => void) {
+  if (code === "no-speech") {
+    toast.info("Didn't catch anything — tap the mic and speak.");
+    return;
+  }
+  if (code === "audio-capture") {
+    toast.error("No microphone found on this device.");
+    return;
+  }
+  if (code === "network") {
+    toast.error("Voice needs an internet connection. Type the memo instead.");
+    return;
+  }
+  if (typeof window !== "undefined" && !window.isSecureContext) {
+    toast.error("Microphone is blocked on non-HTTPS pages.", {
+      description: "Open the app over https:// (the live site) to use voice, or type the memo.",
+      duration: 10000,
+    });
+    return;
+  }
+  toast.error("Microphone access is off.", {
+    description: ENABLE_MIC_STEPS,
+    duration: 15000,
+    action: { label: "Try again", onClick: retry },
+  });
 }
 
 /**
@@ -34,6 +65,8 @@ export function useDictation(onText: (transcript: string) => void) {
     recognitionRef.current = null;
     setListening(false);
   }, []);
+
+  const startRef = useRef<() => void>(() => {});
 
   const start = useCallback(() => {
     const Recognition = getSpeechRecognition();
@@ -53,9 +86,9 @@ export function useDictation(onText: (transcript: string) => void) {
         onTextRef.current(text.trim());
       };
       recognition.onend = () => setListening(false);
-      recognition.onerror = () => {
+      recognition.onerror = (event) => {
         setListening(false);
-        toast.error("Couldn't hear you — check microphone permission.");
+        showDictationError(event.error, () => startRef.current());
       };
       recognition.start();
       recognitionRef.current = recognition;
@@ -64,6 +97,7 @@ export function useDictation(onText: (transcript: string) => void) {
       toast.error("Voice couldn't start.");
     }
   }, []);
+  startRef.current = start;
 
   useEffect(() => () => recognitionRef.current?.stop(), []);
 

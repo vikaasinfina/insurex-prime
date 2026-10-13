@@ -177,7 +177,7 @@ export function AgentSidebar({ currentPath, isOpen, onClose }: AgentSidebarProps
         currentPath={currentPath}
         primary={[
           { label: "Home", icon: LayoutDashboard, href: "/agent/dashboard" },
-          { label: "Customers", icon: Users, href: "/agent/customers" },
+          { label: "Calendar", icon: CalendarDays, href: "/agent/calendar" },
           {
             label: "Sold",
             icon: ShoppingBag,
@@ -185,10 +185,11 @@ export function AgentSidebar({ currentPath, isOpen, onClose }: AgentSidebarProps
             // Recording a sale is reached from Sold Policies.
             alsoActiveFor: ["/agent/sell-policy"],
           },
+          { label: "Notes", icon: StickyNote, href: "/agent/notes" },
         ]}
         more={[
           { label: "Policies", icon: Shield, href: "/agent/policies" },
-          { label: "Field Notes", icon: StickyNote, href: "/agent/notes" },
+          { label: "Customers", icon: Users, href: "/agent/customers" },
           { label: "Goals", icon: Flag, href: "/agent/goals" },
           { label: "Profile", icon: UserRound, href: "/agent/profile" },
         ]}

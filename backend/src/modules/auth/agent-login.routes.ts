@@ -21,6 +21,7 @@ import {
 import { meSchema, toMeDto } from "./auth.routes.js";
 import { assertCanSignIn, getCurrentUser } from "./auth.service.js";
 import { getDummyHash, hashPassword, newPasswordSchema, verifyPassword } from "./password.js";
+import { clearAuthCache } from "../../middleware/auth-cache.js";
 
 const loginBodySchema = z.object({
   identifier: z
@@ -147,6 +148,7 @@ export const agentLoginRoutes: FastifyPluginAsyncZod = async (app) => {
           select: { id: true, userId: true, revokedAt: true, user: { select: { tenantId: true } } },
         });
         if (session && !session.revokedAt) {
+          clearAuthCache();
           await app.db.agentSession.update({
             where: { id: session.id },
             data: { revokedAt: new Date() },

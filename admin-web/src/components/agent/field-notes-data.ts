@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { agentKeys } from "@/lib/agent-queries";
+import { useRouterState } from "@tanstack/react-router";
 import {
   fieldNotesApi,
   retryUnlessClientError,
@@ -12,7 +12,7 @@ import { calendarDaysBetween, noteStage, noteStageLabel } from "./field-notes/fo
 /**
  * Field notes ("sticky memos") an agent drops between customer visits.
  *
- * Stored per agent on the backend (`/agent/field-notes`); `FieldNote` is the shape the screens use.
+ * Stored per user (agent or admin) on the backend (`/field-notes`); `FieldNote` is the shape the screens use.
  */
 export type FieldNoteStatus = "IN_PROGRESS" | "COMPLETED" | "POSTPONED";
 
@@ -79,10 +79,20 @@ const toApiPatch = (patch: Partial<FieldNote>): FieldNoteInput => {
   };
 };
 
-/** The signed-in agent's memos, newest first. */
+/**
+ * Admins and agents share the notes screens but never each other's data, so each portal
+ * caches under its own root (the sign-out of that portal clears it).
+ */
+export function useNoteKey() {
+  const admin = useRouterState({ select: (state) => state.location.pathname.startsWith("/admin") });
+  return [admin ? "admin" : "agent", "field-notes"] as const;
+}
+
+/** The signed-in user's memos, newest first. */
 export function useFieldNotes() {
+  const key = useNoteKey();
   const query = useQuery({
-    queryKey: agentKeys.fieldNotes,
+    queryKey: key,
     queryFn: async () => (await fieldNotesApi.list()).map(fromApi),
     retry: retryUnlessClientError,
   });
@@ -95,7 +105,7 @@ export function useFieldNotes() {
  */
 export function useFieldNoteActions() {
   const queryClient = useQueryClient();
-  const key = agentKeys.fieldNotes;
+  const key = useNoteKey();
   const read = () => queryClient.getQueryData<FieldNote[]>(key) ?? [];
   const write = (next: FieldNote[]) => queryClient.setQueryData(key, next);
   const refresh = () => queryClient.invalidateQueries({ queryKey: key });

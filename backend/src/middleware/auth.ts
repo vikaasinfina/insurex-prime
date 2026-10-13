@@ -10,6 +10,7 @@ import {
   resolveUserForIdentity,
   userInclude,
 } from "../modules/auth/auth.service.js";
+import { cacheSession, clearAuthCache, getCachedSession } from "./auth-cache.js";
 import { AppError, forbidden, unauthenticated } from "../utils/errors.js";
 
 export interface AuthContext {
@@ -112,10 +113,18 @@ export const authPlugin = fp(
       token: string,
     ) {
       assertTrustedOrigin(app, request);
-      const session = await app.db.agentSession.findUnique({
-        where: { tokenHash: hashSessionToken(token) },
-        include: { user: { include: userInclude } },
-      });
+      const tokenHash = hashSessionToken(token);
+      type SessionRow = NonNullable<Awaited<ReturnType<typeof loadSession>>>;
+      const loadSession = () =>
+        app.db.agentSession.findUnique({
+          where: { tokenHash },
+          include: { user: { include: userInclude } },
+        });
+      let session: SessionRow | null | undefined = getCachedSession<SessionRow>(tokenHash);
+      if (!session) {
+        session = await loadSession();
+        if (session) cacheSession(tokenHash, session);
+      }
       if (!session || session.revokedAt) {
         throw new AppError(401, "INVALID_TOKEN", "Your session has ended. Please sign in again.");
       }
@@ -135,6 +144,8 @@ export const authPlugin = fp(
             expiresAt: new Date(Date.now() + ttlHours * 3_600_000),
           },
         });
+        // Keep the cached copy in step so the next request does not write again.
+        session.lastSeenAt = new Date();
         if (reply) setSessionCookie(reply, app.config, token);
       }
 
@@ -195,6 +206,13 @@ export const authPlugin = fp(
         mustChangePassword: false,
       };
     }
+
+    // Any successful write (suspending a tenant, changing a role, a password...) may change who
+    // is allowed in, so cached sessions are dropped before the response goes out.
+    app.addHook("onSend", async (request, reply, payload) => {
+      if (!SAFE_METHODS.has(request.method) && reply.statusCode < 400) clearAuthCache();
+      return payload;
+    });
 
     app.decorate("authenticate", async (request: FastifyRequest, reply?: FastifyReply) => {
       const header = request.headers.authorization;

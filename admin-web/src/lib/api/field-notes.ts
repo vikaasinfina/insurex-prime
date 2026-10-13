@@ -54,7 +54,7 @@ export interface RevisedMemo extends MemoState {
 
 export const fieldNotesApi = {
   revise: (memo: MemoState, instruction: string) =>
-    apiRequest<RevisedMemo>("/agent/field-notes/revise", {
+    apiRequest<RevisedMemo>("/field-notes/revise", {
       method: "POST",
       body: {
         memo,
@@ -64,7 +64,7 @@ export const fieldNotesApi = {
       },
     }),
   parse: (text: string) =>
-    apiRequest<ParsedMemo>("/agent/field-notes/parse", {
+    apiRequest<ParsedMemo>("/field-notes/parse", {
       method: "POST",
       body: {
         text,
@@ -72,16 +72,15 @@ export const fieldNotesApi = {
         utcOffsetMinutes: new Date().getTimezoneOffset(),
       },
     }),
-  list: () => apiRequest<ApiFieldNote[]>("/agent/field-notes"),
+  list: () => apiRequest<ApiFieldNote[]>("/field-notes"),
   create: (input: FieldNoteInput & Pick<ApiFieldNote, "clientName" | "category" | "note">) =>
-    apiRequest<ApiFieldNote>("/agent/field-notes", { method: "POST", body: input }),
+    apiRequest<ApiFieldNote>("/field-notes", { method: "POST", body: input }),
   update: (id: string, patch: FieldNoteInput) =>
-    apiRequest<ApiFieldNote>(`/agent/field-notes/${id}`, { method: "PATCH", body: patch }),
+    apiRequest<ApiFieldNote>(`/field-notes/${id}`, { method: "PATCH", body: patch }),
   bulkUpdate: (ids: string[], patch: FieldNoteInput) =>
-    apiRequest<ApiFieldNote[]>("/agent/field-notes/bulk", {
+    apiRequest<ApiFieldNote[]>("/field-notes/bulk", {
       method: "PATCH",
       body: { ids, patch },
     }),
-  remove: (id: string) =>
-    apiRequest<{ id: string }>(`/agent/field-notes/${id}`, { method: "DELETE" }),
+  remove: (id: string) => apiRequest<{ id: string }>(`/field-notes/${id}`, { method: "DELETE" }),
 };

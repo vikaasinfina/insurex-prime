@@ -1,7 +1,6 @@
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import {
-  requireAgentId,
   requireAuth,
   requireRole,
   requireTenantId,
@@ -13,6 +12,7 @@ import {
   fieldNoteIdParamsSchema,
   fieldNoteSchema,
   listFieldNotesQuerySchema,
+  toFieldNoteDto,
   updateFieldNoteBodySchema,
 } from "./field-notes.schemas.js";
 import {
@@ -30,14 +30,15 @@ import {
   listFieldNotes,
   updateFieldNote,
 } from "./field-notes.service.js";
+import { sendNoteSavedEmail } from "./field-note-emails.js";
 
 const security = [{ bearerAuth: [] }];
 const tags = ["Field Notes"];
 
-/** AGENT-only. An agent can only ever read and change their own memos. */
+/** Agents and admins. Everyone can only ever read and change their own memos. */
 export const fieldNoteRoutes: FastifyPluginAsyncZod = async (app) => {
   app.addHook("onRequest", app.authenticate);
-  app.addHook("preHandler", requireRole("AGENT"));
+  app.addHook("preHandler", requireRole("AGENT", "TENANT_ADMIN", "SUPER_ADMIN"));
 
   app.get(
     "",
@@ -45,13 +46,13 @@ export const fieldNoteRoutes: FastifyPluginAsyncZod = async (app) => {
       schema: {
         tags,
         security,
-        summary: "List the signed-in agent's field notes (newest first, max 500)",
+        summary: "List the signed-in user's field notes (newest first, max 500)",
         querystring: listFieldNotesQuerySchema,
         response: { 200: successSchema(z.array(fieldNoteSchema)), ...errorResponses },
       },
     },
     async (request) =>
-      ok(await listFieldNotes(request.db, requireAgentId(requireAuth(request)), request.query)),
+      ok(await listFieldNotes(request.db, requireAuth(request).userId, request.query)),
   );
 
   app.post(
@@ -70,10 +71,15 @@ export const fieldNoteRoutes: FastifyPluginAsyncZod = async (app) => {
       const created = await createFieldNote(
         request.db,
         requireTenantId(auth),
-        requireAgentId(auth),
+        { userId: auth.userId, agentId: auth.agentId },
         request.body,
       );
-      return reply.code(201).send(ok(created));
+      // Email the agent the memo summary (not when an undo restores an archived memo); the
+      // response doesn't wait for it.
+      if (!request.body.loggedAt) {
+        void sendNoteSavedEmail(app.db, app.config, request.log, auth.userId, created);
+      }
+      return reply.code(201).send(ok(toFieldNoteDto(created)));
     },
   );
 
@@ -94,7 +100,7 @@ export const fieldNoteRoutes: FastifyPluginAsyncZod = async (app) => {
       ok(
         await parseMemo(
           app.config,
-          requireAgentId(requireAuth(request)),
+          requireAuth(request).userId,
           request.body,
           request.log,
         ),
@@ -118,7 +124,7 @@ export const fieldNoteRoutes: FastifyPluginAsyncZod = async (app) => {
       ok(
         await reviseMemo(
           app.config,
-          requireAgentId(requireAuth(request)),
+          requireAuth(request).userId,
           request.body,
           request.log,
         ),
@@ -140,7 +146,7 @@ export const fieldNoteRoutes: FastifyPluginAsyncZod = async (app) => {
       ok(
         await bulkUpdateFieldNotes(
           request.db,
-          requireAgentId(requireAuth(request)),
+          requireAuth(request).userId,
           request.body.ids,
           request.body.patch,
         ),
@@ -163,7 +169,7 @@ export const fieldNoteRoutes: FastifyPluginAsyncZod = async (app) => {
       ok(
         await updateFieldNote(
           request.db,
-          requireAgentId(requireAuth(request)),
+          requireAuth(request).userId,
           request.params.id,
           request.body,
         ),
@@ -182,6 +188,6 @@ export const fieldNoteRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request) =>
-      ok(await deleteFieldNote(request.db, requireAgentId(requireAuth(request)), request.params.id)),
+      ok(await deleteFieldNote(request.db, requireAuth(request).userId, request.params.id)),
   );
 };

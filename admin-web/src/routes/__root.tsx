@@ -10,6 +10,7 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 
+import { OfflineBanner, useServiceWorker } from "@/components/pwa/pwa";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import appCss from "../styles.css?url";
 import { installTableCards } from "../lib/table-cards";
@@ -80,6 +81,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "InsuroX" },
       { name: "description", content: "Simple, secure health and motor insurance management." },
       { name: "author", content: "InsuroX" },
+      // Installed-app look: the status bar matches the app, and iOS opens it full screen.
+      { name: "theme-color", content: "#0f172a" },
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-title", content: "InsuroX" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black" },
+      { name: "format-detection", content: "telephone=no" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -105,6 +113,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "icon", href: "/favicon.ico?v=2", sizes: "any" },
       { rel: "icon", href: "/favicon-32.png?v=2", type: "image/png", sizes: "32x32" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png?v=2" },
+      { rel: "manifest", href: "/manifest.webmanifest" },
     ],
   }),
   shellComponent: RootShell,
@@ -130,9 +139,11 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   useEffect(() => installTableCards(), []);
+  useServiceWorker();
 
   return (
     <QueryClientProvider client={queryClient}>
+      <OfflineBanner />
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
     </QueryClientProvider>

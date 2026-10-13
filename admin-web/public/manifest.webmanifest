@@ -1,0 +1,21 @@
+{
+  "id": "/",
+  "name": "InsuroX Prime",
+  "short_name": "InsuroX",
+  "description": "Insurance management for agents and agencies: customers, policies, notes, goals and calendar.",
+  "start_url": "/login?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    { "src": "/pwa-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/pwa-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/pwa-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Calendar", "url": "/agent/calendar", "icons": [{ "src": "/pwa-192.png", "sizes": "192x192" }] },
+    { "name": "Notes", "url": "/agent/notes", "icons": [{ "src": "/pwa-192.png", "sizes": "192x192" }] }
+  ]
+}

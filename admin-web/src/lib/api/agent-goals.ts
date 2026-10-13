@@ -8,6 +8,8 @@ export interface ApiCategoryGoal {
   targetPremium: number;
   soldPolicies: number;
   closedPremium: number;
+  /** True when no target was saved for this period: it is the weekly target scaled up. */
+  derived: boolean;
 }
 
 export interface ApiGoalPeriod {

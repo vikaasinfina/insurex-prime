@@ -48,11 +48,22 @@ export function periodBounds(cadence: GoalCadenceKey, today: Date) {
   }
 }
 
+/**
+ * Until a monthly, quarterly or yearly target is saved, it follows the weekly one:
+ * weekly x weeks in the period (4 / 13 / 52).
+ */
+export const WEEKS_IN_PERIOD: Record<Exclude<GoalCadenceKey, "weekly">, number> = {
+  monthly: 4,
+  quarterly: 13,
+  yearly: 52,
+};
+
 const emptyCategory = () => ({
   targetPolicies: 0,
   targetPremium: 0,
   soldPolicies: 0,
   closedPremium: 0,
+  derived: false,
 });
 
 /**
@@ -99,6 +110,20 @@ export async function getSalesGoals(db: Database, agentId: string): Promise<Sale
     const row = result[cadence].categories[category];
     row.targetPolicies = goal.targetPolicies;
     row.targetPremium = toNumber(goal.targetPremium);
+  }
+
+  const saved = new Set(goals.map((goal) => `${goal.cadence}:${goal.category}`));
+  for (const cadence of GOAL_CADENCES) {
+    if (cadence === "weekly") continue;
+    for (const category of GOAL_CATEGORIES) {
+      if (saved.has(`${cadenceEnum[cadence]}:${categoryEnum[category]}`)) continue;
+      const weekly = result.weekly.categories[category];
+      if (weekly.targetPolicies === 0) continue;
+      const row = result[cadence].categories[category];
+      row.targetPolicies = weekly.targetPolicies * WEEKS_IN_PERIOD[cadence];
+      row.targetPremium = weekly.targetPremium * WEEKS_IN_PERIOD[cadence];
+      row.derived = true;
+    }
   }
 
   for (const sale of sales) {

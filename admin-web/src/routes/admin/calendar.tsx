@@ -4,6 +4,7 @@ import { AdminFooter } from "@/components/admin/AdminFooter";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { ScheduleCalendar } from "@/components/calendar/ScheduleCalendar";
+import { useNoteEvents } from "@/components/calendar/use-note-events";
 import { requireAdminSession } from "@/lib/admin-route-guard";
 
 export const Route = createFileRoute("/admin/calendar")({
@@ -15,6 +16,7 @@ export const Route = createFileRoute("/admin/calendar")({
 
 function AdminCalendarPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const noteEvents = useNoteEvents();
 
   return (
     <div className="min-h-screen bg-surface/30 text-foreground">
@@ -37,7 +39,7 @@ function AdminCalendarPage() {
               calendar.
             </p>
           </div>
-          <ScheduleCalendar scope="admin" />
+          <ScheduleCalendar scope="admin" extraEvents={noteEvents} />
         </main>
         <AdminFooter />
       </div>

@@ -19,6 +19,7 @@ import { Route as AdminCatalogRouteImport } from './routes/admin/catalog'
 import { Route as AdminChangePasswordRouteImport } from './routes/admin/change-password'
 import { Route as AdminCustomersRouteImport } from './routes/admin/customers'
 import { Route as AdminDashboardRouteImport } from './routes/admin/dashboard'
+import { Route as AdminNotesRouteImport } from './routes/admin/notes'
 import { Route as AdminPlatformSettingsRouteImport } from './routes/admin/platform-settings'
 import { Route as AdminPoliciesRouteImport } from './routes/admin/policies'
 import { Route as AdminReportsRouteImport } from './routes/admin/reports'
@@ -85,6 +86,11 @@ const AdminCustomersRoute = AdminCustomersRouteImport.update({
 const AdminDashboardRoute = AdminDashboardRouteImport.update({
   id: '/admin/dashboard',
   path: '/admin/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminNotesRoute = AdminNotesRouteImport.update({
+  id: '/admin/notes',
+  path: '/admin/notes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminPlatformSettingsRoute = AdminPlatformSettingsRouteImport.update({
@@ -184,6 +190,7 @@ export interface FileRoutesByFullPath {
   '/admin/change-password': typeof AdminChangePasswordRoute
   '/admin/customers': typeof AdminCustomersRoute
   '/admin/dashboard': typeof AdminDashboardRoute
+  '/admin/notes': typeof AdminNotesRoute
   '/admin/platform-settings': typeof AdminPlatformSettingsRoute
   '/admin/policies': typeof AdminPoliciesRoute
   '/admin/reports': typeof AdminReportsRoute
@@ -212,6 +219,7 @@ export interface FileRoutesByTo {
   '/admin/change-password': typeof AdminChangePasswordRoute
   '/admin/customers': typeof AdminCustomersRoute
   '/admin/dashboard': typeof AdminDashboardRoute
+  '/admin/notes': typeof AdminNotesRoute
   '/admin/platform-settings': typeof AdminPlatformSettingsRoute
   '/admin/policies': typeof AdminPoliciesRoute
   '/admin/reports': typeof AdminReportsRoute
@@ -242,6 +250,7 @@ export interface FileRoutesById {
   '/admin/change-password': typeof AdminChangePasswordRoute
   '/admin/customers': typeof AdminCustomersRoute
   '/admin/dashboard': typeof AdminDashboardRoute
+  '/admin/notes': typeof AdminNotesRoute
   '/admin/platform-settings': typeof AdminPlatformSettingsRoute
   '/admin/policies': typeof AdminPoliciesRoute
   '/admin/reports': typeof AdminReportsRoute
@@ -273,6 +282,7 @@ export interface FileRouteTypes {
     | '/admin/change-password'
     | '/admin/customers'
     | '/admin/dashboard'
+    | '/admin/notes'
     | '/admin/platform-settings'
     | '/admin/policies'
     | '/admin/reports'
@@ -301,6 +311,7 @@ export interface FileRouteTypes {
     | '/admin/change-password'
     | '/admin/customers'
     | '/admin/dashboard'
+    | '/admin/notes'
     | '/admin/platform-settings'
     | '/admin/policies'
     | '/admin/reports'
@@ -330,6 +341,7 @@ export interface FileRouteTypes {
     | '/admin/change-password'
     | '/admin/customers'
     | '/admin/dashboard'
+    | '/admin/notes'
     | '/admin/platform-settings'
     | '/admin/policies'
     | '/admin/reports'
@@ -360,6 +372,7 @@ export interface RootRouteChildren {
   AdminChangePasswordRoute: typeof AdminChangePasswordRoute
   AdminCustomersRoute: typeof AdminCustomersRoute
   AdminDashboardRoute: typeof AdminDashboardRoute
+  AdminNotesRoute: typeof AdminNotesRoute
   AdminPlatformSettingsRoute: typeof AdminPlatformSettingsRoute
   AdminPoliciesRoute: typeof AdminPoliciesRoute
   AdminReportsRoute: typeof AdminReportsRoute
@@ -438,6 +451,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/dashboard'
       fullPath: '/admin/dashboard'
       preLoaderRoute: typeof AdminDashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/notes': {
+      id: '/admin/notes'
+      path: '/admin/notes'
+      fullPath: '/admin/notes'
+      preLoaderRoute: typeof AdminNotesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/platform-settings': {
@@ -605,6 +625,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminChangePasswordRoute: AdminChangePasswordRoute,
   AdminCustomersRoute: AdminCustomersRoute,
   AdminDashboardRoute: AdminDashboardRoute,
+  AdminNotesRoute: AdminNotesRoute,
   AdminPlatformSettingsRoute: AdminPlatformSettingsRoute,
   AdminPoliciesRoute: AdminPoliciesRoute,
   AdminReportsRoute: AdminReportsRoute,

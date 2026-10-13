@@ -23,6 +23,8 @@ export interface CategoryGoal {
   targetPremium: number;
   soldPolicies: number;
   closedPremium: number;
+  /** True when this is the weekly target scaled up, not one the agent saved. */
+  derived?: boolean;
 }
 
 export interface SalesGoal {

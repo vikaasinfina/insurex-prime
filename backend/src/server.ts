@@ -2,6 +2,7 @@ import { buildApp } from "./app.js";
 import { createDatabase } from "./config/database.js";
 import { EnvValidationError, loadEnv } from "./config/env.js";
 import { createFirebaseTokenVerifier } from "./config/firebase.js";
+import { startReminderJob } from "./modules/field-notes/field-note-emails.js";
 
 async function main() {
   let env;
@@ -30,6 +31,11 @@ async function main() {
   };
   process.once("SIGINT", () => void shutdown("SIGINT"));
   process.once("SIGTERM", () => void shutdown("SIGTERM"));
+
+  if (env.NOTE_REMINDERS === "true") {
+    const stopReminders = startReminderJob(db, env, app.log);
+    app.addHook("onClose", async () => stopReminders());
+  }
 
   try {
     await app.listen({ host: env.HOST, port: env.PORT });

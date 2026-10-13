@@ -37,8 +37,10 @@ const TYPE_TABS: { id: InsuranceType | ""; label: string }[] = [
 function PolicyCard({ policy, onView }: { policy: ApiPolicy; onView: () => void }) {
   return (
     <article className="flex min-w-0 flex-col rounded-2xl border border-border/80 bg-background p-5 shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
-      <div className="flex items-start justify-between gap-2">
-        <InsuranceTypeBadge type={policy.insuranceType} />
+      <div className="flex min-w-0 items-start justify-between gap-2">
+        <span className="shrink-0">
+          <InsuranceTypeBadge type={policy.insuranceType} />
+        </span>
         <CodeChip>{policy.policyCode}</CodeChip>
       </div>
       <h3 className="mt-3 font-display text-lg font-bold leading-snug text-foreground">

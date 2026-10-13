@@ -21,6 +21,5 @@ export const agentKeys = {
   quote: (params: object) => ["agent", "quote", params] as const,
   receipts: (params: object) => ["agent", "receipts", params] as const,
   goals: ["agent", "goals"] as const,
-  fieldNotes: ["agent", "field-notes"] as const,
   receipt: (id: string) => ["agent", "receipt", id] as const,
 };

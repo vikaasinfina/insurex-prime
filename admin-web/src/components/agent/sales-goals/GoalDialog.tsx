@@ -163,6 +163,13 @@ export function GoalDialog({ open, onOpenChange, goals, cadence, onSaved }: Goal
               </div>
             ))}
 
+            {selected !== "weekly" &&
+              goalCategories.some((key) => goals[selected].categories[key].derived) && (
+                <p className="rounded-lg bg-fo-container px-3 py-2 text-xs text-fo-muted">
+                  These {cadenceLabel[selected].toLowerCase()} targets follow your weekly goals
+                  until you save your own.
+                </p>
+              )}
             <p className="rounded-lg bg-fo-secondary-container/50 px-3 py-2 text-xs text-fo-on-secondary-container">
               Sold policies and closed premium are credited automatically from your recorded sales.
             </p>

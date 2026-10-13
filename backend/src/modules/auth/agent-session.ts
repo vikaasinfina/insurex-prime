@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { Database } from "../../config/database.js";
 import type { Env } from "../../config/env.js";
+import { clearAuthCache } from "../../middleware/auth-cache.js";
 
 /**
  * Agent browser sessions.
@@ -85,6 +86,7 @@ export async function revokeUserSessions(
   userId: string,
   exceptSessionId?: string,
 ) {
+  clearAuthCache();
   await db.agentSession.updateMany({
     where: {
       userId,
