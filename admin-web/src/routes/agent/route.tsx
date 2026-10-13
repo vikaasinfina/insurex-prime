@@ -243,10 +243,10 @@ function AgentLayout() {
             subtitle={subtitle}
             onToggleSidebar={() => setSidebarOpen(true)}
           />
-          <main className="mx-auto flex w-full min-w-0 max-w-[1600px] flex-1 flex-col space-y-6 p-4 sm:p-6 lg:p-8">
+          <main className="mx-auto flex w-full min-w-0 max-w-[1920px] flex-1 flex-col space-y-6 p-4 sm:p-6 lg:p-8">
             <Outlet />
           </main>
-          <AppFooter tenantName={user?.tenant?.name} className="mx-auto w-full max-w-[1600px]" />
+          <AppFooter tenantName={user?.tenant?.name} className="mx-auto w-full max-w-[1920px]" />
         </div>
       </div>
     </AgentSessionContext.Provider>

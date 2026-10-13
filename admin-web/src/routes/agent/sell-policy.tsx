@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import {
   ArrowLeft,
   ArrowRight,
@@ -13,7 +13,7 @@ import {
   ShieldAlert,
   UserRound,
 } from "lucide-react";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   DetailRow,
@@ -52,7 +52,7 @@ import {
   type ApiSoldPolicyDetail,
   type CatalogLine,
 } from "@/lib/api";
-import { expiryStatus } from "@/lib/expiry-status";
+import { RENEWABLE_WITHIN_DAYS, expiryStatus } from "@/lib/expiry-status";
 import { adminKeys } from "@/lib/admin-queries";
 import { agentKeys } from "@/lib/agent-queries";
 import {
@@ -69,6 +69,8 @@ interface SellSearch {
   policyId?: string | undefined;
   /** Renewal mode: pick an existing customer and start from their last policy. */
   renewal?: true | undefined;
+  /** Renewal mode with this earlier sale already chosen and every field prefilled. */
+  renews?: string | undefined;
 }
 
 const text = (value: unknown) => (typeof value === "string" && value ? value : undefined);
@@ -77,6 +79,7 @@ export const Route = createFileRoute("/agent/sell-policy")({
   validateSearch: (raw: Record<string, unknown>): SellSearch => ({
     policyId: text(raw["policyId"]),
     renewal: raw["renewal"] === true || raw["renewal"] === "true" ? true : undefined,
+    renews: text(raw["renews"]),
   }),
   head: () => ({ meta: [{ title: "Record Policy — InsuroX Prime" }] }),
   component: RecordSoldPolicyPage,
@@ -242,11 +245,6 @@ function latestPerPolicy(sales: ApiSoldPolicy[]) {
 }
 
 /** A policy can be renewed once it has expired or is this close to expiring. */
-const RENEWABLE_WITHIN_DAYS = (() => {
-  const days = Number(import.meta.env.VITE_RENEWABLE_WITHIN_DAYS);
-  return Number.isFinite(days) && days >= 0 ? days : 30;
-})();
-
 function RenewedPolicyFinder({
   busy,
   onSelectSale,
@@ -979,7 +977,7 @@ function SaleForm({
                 type="date"
                 min={form.issueDate}
                 disabled={!termByAgent}
-                value={termByAgent ? form.expiryDate : ""}
+                value={expiryPreview}
                 onChange={(event) => set("expiryDate", event.target.value)}
                 aria-invalid={Boolean(errors.expiryDate)}
                 className={inputClass("expiryDate")}
@@ -1201,7 +1199,8 @@ function RecordSoldPolicyPage() {
     <RecordSoldPolicyFlow
       adminMode={false}
       presetPolicyId={params.policyId}
-      renewal={params.renewal === true}
+      renewal={params.renewal === true || Boolean(params.renews)}
+      presetRenewsSaleId={params.renews}
       onSearchChange={(policyId) =>
         void navigate({
           search: (prev) => ({ ...prev, policyId }),
@@ -1219,17 +1218,21 @@ function RecordSoldPolicyPage() {
 export function RecordSoldPolicyFlow({
   adminMode,
   presetPolicyId,
+  presetRenewsSaleId,
   renewal,
   onSearchChange,
   onViewLedger,
 }: {
   adminMode: boolean;
   presetPolicyId?: string | undefined;
+  /** Opened from a "Renew" link: the earlier sale to renew, loaded and prefilled on arrival. */
+  presetRenewsSaleId?: string | undefined;
   renewal?: boolean;
   /** Keeps the page URL in step with the chosen policy (agent portal only). */
   onSearchChange?: (policyId: string | undefined) => void;
   onViewLedger?: () => void;
 }) {
+  const router = useRouter();
   const [policy, setPolicy] = useState<ApiPolicy | null>(null);
   const [sale, setSale] = useState<ApiSoldPolicyDetail | null>(null);
   // Held here so "Back to policy catalog" returns to what was picked.
@@ -1306,6 +1309,21 @@ export function RecordSoldPolicyFlow({
     }
   };
 
+  const autoRenewStarted = useRef(false);
+  useEffect(() => {
+    if (!presetRenewsSaleId || autoRenewStarted.current) return;
+    autoRenewStarted.current = true;
+    setLoadingRenewal(true);
+    soldPoliciesApi
+      .get(presetRenewsSaleId)
+      .then((previous) => pickRenewalSale(previous))
+      .catch((error) => {
+        setLoadingRenewal(false);
+        toast.error(errorText(error, "The earlier policy could not be loaded."));
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on arrival
+  }, [presetRenewsSaleId]);
+
   if (sale) {
     return (
       <SaleSuccess
@@ -1329,8 +1347,24 @@ export function RecordSoldPolicyFlow({
   const loadingPreset = Boolean(presetPolicyId) && !policy && presetPolicy.isLoading;
   const step: 1 | 2 = policy ? 2 : 1;
 
+  // Back to the page the agent came from (e.g. the sold policies list); the policy list otherwise.
+  const goBack = () => {
+    if (window.history.length > 1) router.history.back();
+    else if (onViewLedger) onViewLedger();
+    else void router.navigate({ to: "/agent/sold-policies" });
+  };
+
   return (
     <>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="-ml-2 mb-3 rounded-lg"
+        onClick={goBack}
+      >
+        <ArrowLeft /> Back
+      </Button>
       <div
         role="tablist"
         aria-label="Policy type"

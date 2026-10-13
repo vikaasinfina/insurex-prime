@@ -1,4 +1,5 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Eye, Pencil, RotateCcw, Search, ShoppingBag, Trash2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { SoldPolicyDialog } from "@/components/agent/SoldPolicyDialog";
@@ -19,7 +20,6 @@ import {
   tdClass,
   thClass,
 } from "@/components/agent/agent-ui";
-import { SaleTypeBadge } from "@/components/SaleTypeBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
@@ -27,8 +27,8 @@ import { adminKeys } from "@/lib/admin-queries";
 import { agentsApi, retryUnlessClientError, soldPoliciesApi } from "@/lib/api";
 import type { ApiSoldPolicy, InsuranceType } from "@/lib/api/types";
 import { agentKeys } from "@/lib/agent-queries";
-import { expiryStatus } from "@/lib/expiry-status";
-import { formatDate, formatINR } from "@/lib/format";
+import { RENEWABLE_WITHIN_DAYS, expiryStatus } from "@/lib/expiry-status";
+import { daysUntil, formatDate, formatINR } from "@/lib/format";
 import { policyAge } from "@/lib/policy-age";
 
 const PAGE_SIZE = 10;
@@ -207,7 +207,7 @@ export function SoldPoliciesLedger({
           </p>
         )}
 
-        {sold.isLoading && <TableSkeleton columns={adminMode ? 11 : 10} />}
+        {sold.isLoading && <TableSkeleton columns={adminMode ? 10 : 9} />}
         {sold.error != null && !sold.data && (
           <ErrorState error={sold.error} onRetry={() => void sold.refetch()} />
         )}
@@ -243,7 +243,6 @@ export function SoldPoliciesLedger({
                     ...(adminMode ? ["Agent"] : []),
                     "Insurance Type",
                     "Premium",
-                    "Sale Type",
                     "Policy Age",
                     "Issue Date",
                     "Expiry Date",
@@ -271,12 +270,14 @@ export function SoldPoliciesLedger({
                         <CodeChip>{sale.policyNumber}</CodeChip>
                       </td>
                       <td className={`${tdClass} font-bold text-foreground`}>
-                        <p className="whitespace-nowrap">{sale.customer.fullName}</p>
+                        <p className="min-w-[110px] max-w-[200px]">{sale.customer.fullName}</p>
                         <p className="font-mono text-[11px] font-normal text-muted-foreground">
                           {sale.customer.customerCode}
                         </p>
                       </td>
-                      <td className={tdClass}>{sale.policy.policyName}</td>
+                      <td className={tdClass}>
+                        <p className="min-w-[110px] max-w-[200px]">{sale.policy.policyName}</p>
+                      </td>
                       {adminMode && (
                         <td className={tdClass}>
                           <p className="whitespace-nowrap font-semibold text-foreground">
@@ -296,9 +297,6 @@ export function SoldPoliciesLedger({
                         {formatINR(sale.premium)}
                       </td>
                       <td className={tdClass}>
-                        <SaleTypeBadge renewal={sale.isRenewal} />
-                      </td>
-                      <td className={tdClass}>
                         <PolicyAgeBadge inceptionDate={sale.inceptionDate} />
                       </td>
                       <td className={`${tdClass} whitespace-nowrap text-muted-foreground`}>
@@ -308,37 +306,66 @@ export function SoldPoliciesLedger({
                         {formatDate(sale.expiryDate)}
                       </td>
                       <td className={tdClass}>
-                        <span
-                          className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-bold ${expiry.badge}`}
-                        >
-                          {expiry.label}
-                        </span>
+                        {!adminMode &&
+                        !sale.isRenewed &&
+                        !sale.isFinalPremium &&
+                        sale.policyStatus !== "CANCELLED" &&
+                        daysUntil(sale.expiryDate) <= RENEWABLE_WITHIN_DAYS ? (
+                          // Wrapped in a span: the phone card CSS lets a cell's direct <a> wrap its text.
+                          <span className="inline-flex flex-col items-start gap-0.5">
+                            <span
+                              className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-bold ${expiry.badge}`}
+                            >
+                              {expiry.label}
+                            </span>
+                            <Link
+                              to="/agent/sell-policy"
+                              search={{ renewal: true, renews: sale.id }}
+                              title="Record the renewal with all details filled in"
+                              className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-bold hover:brightness-125 ${expiry.badge}`}
+                            >
+                              Renew
+                            </Link>
+                          </span>
+                        ) : (
+                          <span
+                            className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-bold ${expiry.badge}`}
+                          >
+                            {expiry.label}
+                          </span>
+                        )}
                       </td>
                       <td className={`${tdClass} text-right`}>
                         <div className="flex justify-end gap-1.5">
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-7 rounded-lg px-2 text-xs"
+                            className="size-8 rounded-lg p-0"
+                            aria-label="View"
+                            title="View"
                             onClick={() => onViewChange(sale.id)}
                           >
-                            <Eye /> View
+                            <Eye />
                           </Button>
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-7 rounded-lg px-2 text-xs"
+                            className="size-8 rounded-lg p-0"
+                            aria-label="Edit"
+                            title="Edit"
                             onClick={() => setEditSale(sale)}
                           >
-                            <Pencil /> Edit
+                            <Pencil />
                           </Button>
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-7 rounded-lg px-2 text-xs text-destructive hover:text-destructive"
+                            className="size-8 rounded-lg p-0 text-destructive hover:text-destructive"
+                            aria-label="Delete"
+                            title="Delete"
                             onClick={() => setDeleteSale(sale)}
                           >
-                            <Trash2 /> Delete
+                            <Trash2 />
                           </Button>
                         </div>
                       </td>

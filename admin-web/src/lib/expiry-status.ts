@@ -1,5 +1,11 @@
 import { daysUntil } from "@/lib/format";
 
+/** A policy can be renewed once it has lapsed or is within this many days of expiry. */
+export const RENEWABLE_WITHIN_DAYS = (() => {
+  const days = Number(import.meta.env.VITE_RENEWABLE_WITHIN_DAYS);
+  return Number.isFinite(days) && days >= 0 ? days : 30;
+})();
+
 /** How close a policy is to its expiry, as a label and a colour (red = lapsed or about to). */
 export function expiryStatus(expiryDate: string, renewed = false, completed = false) {
   // LIFE paying term is over: nothing left to pay or renew.
