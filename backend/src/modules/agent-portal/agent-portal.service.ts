@@ -103,6 +103,7 @@ export async function getAgentDashboard(
   const expiringWhere: Prisma.SoldPolicyWhereInput = {
     ...notRenewed,
     agentId,
+    isFinalPremium: false,
     policyStatus: { in: ["ACTIVE", "PENDING"] },
     expiryDate: { gte: today, lte: expiringUntil },
   };

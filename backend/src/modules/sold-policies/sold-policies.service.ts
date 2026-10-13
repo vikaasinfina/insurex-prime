@@ -61,6 +61,12 @@ export const toSoldPolicyDto = (sold: SoldPolicyRecord) => ({
   issueDate: toDateOnly(sold.issueDate),
   isRenewal: sold.renewedFromId !== null,
   isRenewed: sold.renewals.length > 0,
+  premiumPayingTerm: sold.premiumPayingTerm,
+  isFinalPremium: sold.isFinalPremium,
+  isCompleted:
+    sold.isFinalPremium &&
+    sold.policyStatus !== "CANCELLED" &&
+    sold.expiryDate < parseDateOnly(new Date().toISOString()),
   inceptionDate: toDateOnly(sold.inceptionDate ?? sold.issueDate),
   expiryDate: toDateOnly(sold.expiryDate),
   paymentStatus: sold.paymentStatus,
@@ -136,6 +142,22 @@ export async function getSoldPolicy(db: Database, auth: AuthContext, id: string)
 }
 
 /** Last day of cover: issue date + duration − 1 day (e.g. 1 Jan → 31 Dec). */
+/**
+ * LIFE paying term: true when the period ending on `expiryDate` is the last premium year, i.e. it
+ * reaches `term` years after the policy's first issue date (inception, else issue date).
+ */
+export function isFinalPremiumPeriod(
+  term: number | null,
+  inceptionOrIssue: Date,
+  expiryDate: Date,
+): boolean {
+  if (term === null) return false;
+  const lastDay = new Date(inceptionOrIssue);
+  lastDay.setUTCFullYear(lastDay.getUTCFullYear() + term);
+  lastDay.setUTCDate(lastDay.getUTCDate() - 1);
+  return expiryDate >= lastDay;
+}
+
 export function computeExpiryDate(issueDate: Date, durationMonths: number): Date {
   const expiry = new Date(issueDate);
   expiry.setUTCMonth(expiry.getUTCMonth() + durationMonths);
@@ -159,7 +181,7 @@ export const notRenewed: Prisma.SoldPolicyWhereInput = {
   renewals: { none: { policyStatus: { not: "CANCELLED" } } },
 };
 
-export type LiveStatus = "ACTIVE" | "PENDING" | "EXPIRED" | "RENEWED";
+export type LiveStatus = "ACTIVE" | "PENDING" | "EXPIRED" | "RENEWED" | "COMPLETED";
 
 /**
  * The status a sale really has today. The stored policyStatus is never moved to EXPIRED, so
@@ -173,7 +195,20 @@ export function liveStatusWhere(status: LiveStatus, today: Date): Prisma.SoldPol
     case "PENDING":
       return { policyStatus: "PENDING", expiryDate: { gte: today }, ...notRenewed };
     case "EXPIRED":
-      return { policyStatus: { not: "CANCELLED" }, expiryDate: { lt: today }, ...notRenewed };
+      // A LIFE sale past its last premium year is COMPLETED, not expired: nothing to renew.
+      return {
+        policyStatus: { not: "CANCELLED" },
+        expiryDate: { lt: today },
+        isFinalPremium: false,
+        ...notRenewed,
+      };
+    case "COMPLETED":
+      return {
+        policyStatus: { not: "CANCELLED" },
+        expiryDate: { lt: today },
+        isFinalPremium: true,
+        ...notRenewed,
+      };
     case "RENEWED":
       return {
         policyStatus: { not: "CANCELLED" },
@@ -184,7 +219,7 @@ export function liveStatusWhere(status: LiveStatus, today: Date): Prisma.SoldPol
 
 /** Where-clause for the list's `expiry` filter (and the matching dashboard counts). */
 export function expiryWhere(
-  expiry: "ACTIVE" | "EXPIRING" | "EXPIRED",
+  expiry: "ACTIVE" | "EXPIRING" | "EXPIRED" | "COMPLETED",
   today: Date,
 ): Prisma.SoldPolicyWhereInput {
   switch (expiry) {
@@ -193,11 +228,14 @@ export function expiryWhere(
     case "EXPIRING":
       return {
         ...notRenewed,
+        isFinalPremium: false,
         policyStatus: { in: ["ACTIVE", "PENDING"] },
         expiryDate: { gte: today, lte: new Date(today.getTime() + EXPIRING_WINDOW_DAYS * DAY_MS) },
       };
     case "EXPIRED":
       return liveStatusWhere("EXPIRED", today);
+    case "COMPLETED":
+      return liveStatusWhere("COMPLETED", today);
   }
 }
 
@@ -211,6 +249,7 @@ type SaleInput = Pick<
   | "premium"
   | "expiryDate"
   | "renewal"
+  | "premiumPayingTerm"
 >;
 
 /**
@@ -299,6 +338,10 @@ export async function resolveSale(db: Database, auth: AuthContext, body: SaleInp
     throw badRequest("inceptionDate cannot be after the issue date.");
   }
 
+  if (body.premiumPayingTerm !== undefined && policy.insuranceType !== "LIFE") {
+    throw badRequest("premiumPayingTerm applies to LIFE policies only.");
+  }
+
   return {
     policy,
     customer,
@@ -356,7 +399,7 @@ export async function createSoldPolicy(
   const renewedFrom = body.renewsSoldPolicyId
     ? await db.soldPolicy.findFirst({
         where: { id: body.renewsSoldPolicyId, customerId: customer.id, ...soldPolicyScope(auth) },
-        select: { id: true },
+        select: renewedFromSelect,
       })
     : await db.soldPolicy.findFirst({
         where: {
@@ -367,17 +410,37 @@ export async function createSoldPolicy(
           ...notRenewed,
         },
         orderBy: { issueDate: "desc" },
-        select: { id: true },
+        select: renewedFromSelect,
       });
   if (body.renewsSoldPolicyId && !renewedFrom) {
     throw badRequest("renewsSoldPolicyId is not one of this customer's policies.");
   }
+  if (renewedFrom?.isFinalPremium) {
+    throw conflict("The premium paying term of this policy is complete: it cannot be renewed.");
+  }
+  // A renewal inherits the paying term and counts from the policy's first issue date.
+  const premiumPayingTerm =
+    policy.insuranceType === "LIFE"
+      ? (body.premiumPayingTerm ?? renewedFrom?.premiumPayingTerm ?? null)
+      : null;
+  const isFinalPremium = isFinalPremiumPeriod(
+    premiumPayingTerm,
+    inceptionDate ?? renewedFrom?.inceptionDate ?? renewedFrom?.issueDate ?? issueDate,
+    expiryDate,
+  );
   const paidAtSale = Boolean(body.paymentMethod);
   const year = issueDate.getUTCFullYear();
   const receiptYear = new Date().getUTCFullYear();
 
+  if (body.policyNumber) {
+    const taken = await db.soldPolicy.findUnique({
+      where: { policyNumber: body.policyNumber },
+      select: { id: true },
+    });
+    if (taken) throw conflict("That policy number is already in use.");
+  }
   const sold = await withGeneratedCode(
-    () => randomCode(`POL-${year}`, 8),
+    () => body.policyNumber ?? randomCode(`POL-${year}`, 8),
     (policyNumber) =>
       db.$transaction(async (tx) => {
         const created = await tx.soldPolicy.create({
@@ -392,6 +455,8 @@ export async function createSoldPolicy(
             issueDate,
             inceptionDate,
             expiryDate,
+            premiumPayingTerm,
+            isFinalPremium,
             ...(renewedFrom ? { renewedFromId: renewedFrom.id } : {}),
             // A sale is in force straight away; only the payment status depends on collection.
             policyStatus: "ACTIVE",
@@ -433,6 +498,14 @@ export async function createSoldPolicy(
   return toSoldPolicyDetailDto(sold);
 }
 
+const renewedFromSelect = {
+  id: true,
+  issueDate: true,
+  inceptionDate: true,
+  premiumPayingTerm: true,
+  isFinalPremium: true,
+} as const;
+
 /** Admins may edit any sale; an agent only their own, and never its payment or policy status. */
 export async function updateSoldPolicy(
   db: Database,
@@ -445,6 +518,25 @@ export async function updateSoldPolicy(
   if (!existing) throw notFound("Sold policy");
   if (!isAdmin(auth) && (body.policyStatus || body.paymentStatus)) {
     throw forbidden("Agents cannot change a sale's payment or policy status.");
+  }
+  if (body.policyId && body.policyId !== existing.policyId) {
+    const [product, current] = await Promise.all([
+      db.policy.findUnique({ where: { id: body.policyId } }),
+      db.policy.findUniqueOrThrow({ where: { id: existing.policyId } }),
+    ]);
+    if (!product) throw notFound("Policy");
+    if (product.status !== "ACTIVE") throw conflict("INACTIVE policies cannot be sold.");
+    if (!isAdmin(auth) && product.insuranceType !== current.insuranceType) {
+      throw forbidden("Agents can only switch to a product of the same line of business.");
+    }
+  }
+
+  if (body.policyNumber && body.policyNumber !== existing.policyNumber) {
+    const taken = await db.soldPolicy.findUnique({
+      where: { policyNumber: body.policyNumber },
+      select: { id: true },
+    });
+    if (taken) throw conflict("That policy number is already in use.");
   }
 
   const issueDate = body.issueDate ? parseDateOnly(body.issueDate) : existing.issueDate;
@@ -460,6 +552,25 @@ export async function updateSoldPolicy(
     throw badRequest("inceptionDate cannot be after the issue date.");
   }
 
+  const product = await db.policy.findUniqueOrThrow({
+    where: { id: body.policyId ?? existing.policyId },
+    select: { insuranceType: true },
+  });
+  const premiumPayingTerm =
+    product.insuranceType !== "LIFE"
+      ? null
+      : body.premiumPayingTerm !== undefined
+        ? body.premiumPayingTerm
+        : existing.premiumPayingTerm;
+  if (body.premiumPayingTerm && product.insuranceType !== "LIFE") {
+    throw badRequest("premiumPayingTerm applies to LIFE policies only.");
+  }
+  const isFinalPremium = isFinalPremiumPeriod(
+    premiumPayingTerm,
+    inceptionDate === undefined ? (existing.inceptionDate ?? issueDate) : (inceptionDate ?? issueDate),
+    expiryDate,
+  );
+
   const sold = await db.$transaction(async (tx) => {
     const updated = await tx.soldPolicy.update({
       where: { id },
@@ -467,6 +578,10 @@ export async function updateSoldPolicy(
         ...(body.policyStatus ? { policyStatus: body.policyStatus } : {}),
         ...(body.paymentStatus ? { paymentStatus: body.paymentStatus } : {}),
         ...(body.premium !== undefined ? { premium: body.premium } : {}),
+        ...(body.policyNumber ? { policyNumber: body.policyNumber } : {}),
+        ...(body.policyId ? { policyId: body.policyId } : {}),
+        premiumPayingTerm,
+        isFinalPremium,
         issueDate,
         ...(inceptionDate !== undefined ? { inceptionDate } : {}),
         ...(body.insurerPolicyNumber !== undefined

@@ -348,6 +348,11 @@ model SoldPolicy {
   /// First time this policy was ever issued (before renewals). Null means a new policy: age counts from issueDate.
   inceptionDate       DateTime?        @db.Date
   expiryDate          DateTime         @db.Date
+  /// LIFE only: years premiums must be paid (e.g. 15). Null = no fixed paying term.
+  premiumPayingTerm   Int?
+  /// True when this sale's period is the last premium year (inception + term). Once it
+  /// ends the policy is COMPLETED and is never offered for renewal.
+  isFinalPremium      Boolean          @default(false)
   paymentStatus       PaymentStatus    @default(PENDING)
   policyStatus        SoldPolicyStatus @default(PENDING)
   /// The earlier sale this one renews. That sale stops counting as expired. Cleared if this sale is deleted.

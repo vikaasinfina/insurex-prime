@@ -225,6 +225,7 @@ interface RenewalPrefill {
   inceptionDate: string;
   premium: string;
   insurerPolicyNumber: string;
+  premiumPayingTerm: string;
   /** Length of the previous term, reused when the catalog has no fixed duration. */
   spanDays: number;
 }
@@ -305,10 +306,13 @@ function RenewedPolicyFinder({
         )}
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {policies.map((sale) => {
-            const status = expiryStatus(sale.expiryDate, sale.isRenewed);
-            // Renewals are recorded only once a policy has lapsed or is within 30 days of expiry.
+            const status = expiryStatus(sale.expiryDate, sale.isRenewed, sale.isCompleted);
+            // Renewals are recorded only once a policy has lapsed or is within 30 days of expiry,
+            // and never once a LIFE policy has reached its last premium year.
             const renewable =
-              !sale.isRenewed && daysUntil(sale.expiryDate) <= RENEWABLE_WITHIN_DAYS;
+              !sale.isRenewed &&
+              !sale.isFinalPremium &&
+              daysUntil(sale.expiryDate) <= RENEWABLE_WITHIN_DAYS;
             return (
               <button
                 key={sale.id}
@@ -318,7 +322,9 @@ function RenewedPolicyFinder({
                 title={
                   renewable
                     ? undefined
-                    : `Still active: it can be renewed within ${RENEWABLE_WITHIN_DAYS} days of expiry.`
+                    : sale.isFinalPremium
+                      ? "Premium paying term complete: nothing left to renew."
+                      : `Still active: it can be renewed within ${RENEWABLE_WITHIN_DAYS} days of expiry.`
                 }
                 onClick={() => renewable && onSelectSale(sale)}
                 className={`rounded-xl border border-border/70 bg-background p-4 text-left transition-colors ${
@@ -592,6 +598,7 @@ function PolicyStep({
 
 interface SaleDraft {
   insurerPolicyNumber: string;
+  premiumPayingTerm: string;
   issueDate: string;
   inceptionDate: string;
   expiryDate: string;
@@ -701,6 +708,7 @@ function SaleForm({
   });
   // Catalog policies without a price or term are quoted on the insurer's portal: the agent
   // enters the real figures. Otherwise the catalog premium and term apply.
+  const isLife = policy.insuranceType === "LIFE";
   const pricedByAgent = policy.premium === null;
   const termByAgent = policy.durationMonths === null;
   // Admins may change the catalog premium (e.g. it moved at renewal); agents only when it is unpriced.
@@ -716,6 +724,7 @@ function SaleForm({
   );
   const [form, setForm] = useState<SaleDraft>({
     insurerPolicyNumber: prefill?.insurerPolicyNumber ?? "",
+    premiumPayingTerm: prefill?.premiumPayingTerm ?? "",
     issueDate: prefill?.issueDate ?? today,
     inceptionDate: prefill?.inceptionDate ?? "",
     expiryDate: prefill && termByAgent ? shiftIsoDate(prefill.issueDate, prefill.spanDays) : "",
@@ -764,6 +773,9 @@ function SaleForm({
           ? { premium: Number(form.premium) }
           : {}),
         ...(termByAgent ? { expiryDate: form.expiryDate } : {}),
+        ...(isLife && form.premiumPayingTerm
+          ? { premiumPayingTerm: Number(form.premiumPayingTerm) }
+          : {}),
         ...(form.insurerPolicyNumber.trim()
           ? { insurerPolicyNumber: form.insurerPolicyNumber.trim() }
           : {}),
@@ -795,6 +807,9 @@ function SaleForm({
     }
     if (form.inceptionDate && form.inceptionDate > form.issueDate) {
       problems.inceptionDate = "Cannot be after the issue date.";
+    }
+    if (isLife && form.premiumPayingTerm && !(Number(form.premiumPayingTerm) >= 1)) {
+      problems.premiumPayingTerm = "Enter the number of years.";
     }
     if (termByAgent) {
       if (!form.expiryDate) problems.expiryDate = "Enter the expiry date.";
@@ -1010,6 +1025,26 @@ function SaleForm({
                 className="h-10 rounded-xl"
               />
             </Field>
+            {isLife && (
+              <Field
+                id="rec-paying-term"
+                label="Premium paying term (years)"
+                hint="Years premiums are payable, e.g. 15. After the last year the policy is marked Completed and is not offered for renewal."
+                error={errors.premiumPayingTerm}
+              >
+                <Input
+                  id="rec-paying-term"
+                  inputMode="numeric"
+                  maxLength={3}
+                  value={form.premiumPayingTerm}
+                  onChange={(event) =>
+                    set("premiumPayingTerm", event.target.value.replace(/\D/g, ""))
+                  }
+                  aria-invalid={Boolean(errors.premiumPayingTerm)}
+                  className={inputClass("premiumPayingTerm")}
+                />
+              </Field>
+            )}
             <Field id="rec-coverage" label="Coverage amount (₹)" error={errors.coverageAmount}>
               <Input
                 id="rec-coverage"
@@ -1253,6 +1288,7 @@ export function RecordSoldPolicyFlow({
         inceptionDate: previous.inceptionDate,
         premium: String(previous.premium),
         insurerPolicyNumber: previous.insurerPolicyNumber ?? "",
+        premiumPayingTerm: previous.premiumPayingTerm ? String(previous.premiumPayingTerm) : "",
         spanDays: Math.max(1, daysBetween(previous.issueDate, previous.expiryDate)),
       });
       setSelection({

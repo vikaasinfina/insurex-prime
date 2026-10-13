@@ -58,13 +58,16 @@ function toSqlBounds(range: DateRangeInput): SqlBounds {
   return bounds;
 }
 
-/** The live status of a sale today (see liveStatusWhere): renewed, else expired by date, else stored. */
+/**
+ * The live status of a sale today (see liveStatusWhere): renewed, else expired by date, else stored.
+ * A LIFE sale past its last premium year is completed, not expired, so it keeps its stored status.
+ */
 const LIVE_STATUS_SQL = Prisma.sql`CASE
   WHEN EXISTS (
     SELECT 1 FROM sold_policies r
     WHERE r."renewedFromId" = sp.id AND r."policyStatus"::text <> 'CANCELLED'
   ) THEN 'RENEWED'
-  WHEN sp."expiryDate" < CURRENT_DATE THEN 'EXPIRED'
+  WHEN sp."expiryDate" < CURRENT_DATE AND NOT sp."isFinalPremium" THEN 'EXPIRED'
   ELSE sp."policyStatus"::text
 END`;
 
@@ -350,7 +353,7 @@ export async function getPortfolioSummary(
                SELECT 1 FROM sold_policies r
                WHERE r."renewedFromId" = sp.id AND r."policyStatus"::text <> 'CANCELLED'
              ) THEN 'RENEWED'
-             WHEN sp."expiryDate" < CURRENT_DATE THEN 'EXPIRED'
+             WHEN sp."expiryDate" < CURRENT_DATE AND NOT sp."isFinalPremium" THEN 'EXPIRED'
              ELSE sp."policyStatus"::text
            END AS status,
            COUNT(*)::int AS count,

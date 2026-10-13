@@ -47,6 +47,11 @@ export const soldPolicySchema = z
     isRenewed: z
       .boolean()
       .describe("A later sale renews this one, so it no longer counts as expired"),
+    premiumPayingTerm: z.number().nullable().describe("LIFE only: years premiums are payable"),
+    isFinalPremium: z.boolean().describe("This sale's period is the last premium year"),
+    isCompleted: z
+      .boolean()
+      .describe("Final premium year is over: nothing left to pay or renew (LIFE paying term)"),
     inceptionDate: z
       .string()
       .describe("YYYY-MM-DD; when the policy was first issued. Equals issueDate for a new policy"),
@@ -84,10 +89,10 @@ export const listSoldPoliciesQuerySchema = paginationQuerySchema
     paymentStatus: z.enum(PaymentStatus).optional(),
     insuranceType: z.enum(InsuranceType).optional(),
     expiry: z
-      .enum(["ACTIVE", "EXPIRING", "EXPIRED"])
+      .enum(["ACTIVE", "EXPIRING", "EXPIRED", "COMPLETED"])
       .optional()
       .describe(
-        "ACTIVE: in force, not yet expired. EXPIRING: expires within 30 days. EXPIRED: past expiry, not cancelled.",
+        "ACTIVE: in force, not yet expired. EXPIRING: expires within 30 days. EXPIRED: past expiry, not cancelled (LIFE sales past their last premium year are COMPLETED instead).",
       ),
     agentId: z.uuid().optional().describe("SUPER_ADMIN only; ignored for agents"),
     customerId: z.uuid().optional(),
@@ -130,6 +135,22 @@ export const createSoldPolicyBodySchema = z.object({
     .optional()
     .describe(
       "YYYY-MM-DD. Required when the policy has no catalog duration; otherwise only admins may override the computed date.",
+    ),
+  policyNumber: z
+    .string()
+    .trim()
+    .min(1)
+    .max(60)
+    .optional()
+    .describe("Policy number to record. Generated (POL-YYYY-XXXXXXXX) when omitted"),
+  premiumPayingTerm: z
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .optional()
+    .describe(
+      "LIFE only: number of years premiums are payable. After the last premium year the policy is COMPLETED and is no longer offered for renewal. A renewal inherits it from the policy it renews",
     ),
   insurerPolicyNumber: z
     .string()
@@ -176,6 +197,9 @@ export const updateSoldPolicyBodySchema = z
     issueDate: z.iso.date(),
     inceptionDate: z.iso.date().nullable(),
     expiryDate: z.iso.date(),
+    premiumPayingTerm: z.number().int().min(1).max(100).nullable(),
+    policyNumber: z.string().trim().min(1).max(60),
+    policyId: z.uuid().describe("move the sale to another ACTIVE catalog product (agents: same line of business only)"),
     insurerPolicyNumber: z.string().trim().max(60).nullable(),
     premium: z.number().positive().max(1e10),
   })

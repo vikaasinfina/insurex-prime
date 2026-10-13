@@ -1,7 +1,15 @@
 import { daysUntil } from "@/lib/format";
 
 /** How close a policy is to its expiry, as a label and a colour (red = lapsed or about to). */
-export function expiryStatus(expiryDate: string, renewed = false) {
+export function expiryStatus(expiryDate: string, renewed = false, completed = false) {
+  // LIFE paying term is over: nothing left to pay or renew.
+  if (completed) {
+    return {
+      label: "Completed",
+      badge: "bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/25",
+      row: "",
+    };
+  }
   // A later sale already renews this one: nothing left to chase.
   if (renewed) {
     return {

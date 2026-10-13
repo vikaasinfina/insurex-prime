@@ -172,6 +172,12 @@ export interface ApiSoldPolicy {
   isRenewal: boolean;
   /** A later sale renews this one, so it no longer counts as expired. */
   isRenewed: boolean;
+  /** LIFE only: years premiums are payable. */
+  premiumPayingTerm: number | null;
+  /** This sale's period is the last premium year. */
+  isFinalPremium: boolean;
+  /** Final premium year is over: nothing left to pay or renew. */
+  isCompleted: boolean;
   expiryDate: string;
   paymentStatus: PaymentStatus;
   policyStatus: SoldPolicyStatus;

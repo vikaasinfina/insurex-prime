@@ -231,13 +231,15 @@ export function SaleStatusBadge({
   status,
   expiryDate,
   renewed = false,
+  completed = false,
 }: {
   status: SoldPolicyStatus;
   expiryDate: string;
   renewed?: boolean;
+  completed?: boolean;
 }) {
   if (status === "CANCELLED" || status === "PENDING") return <PolicyStatusBadge status={status} />;
-  const expiry = expiryStatus(expiryDate, renewed);
+  const expiry = expiryStatus(expiryDate, renewed, completed);
   return (
     <span
       className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-bold ${expiry.badge}`}

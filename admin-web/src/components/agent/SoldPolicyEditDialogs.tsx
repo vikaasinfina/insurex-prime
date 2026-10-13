@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Pencil, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
@@ -22,9 +22,16 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { adminKeys } from "@/lib/admin-queries";
 import { agentKeys } from "@/lib/agent-queries";
-import { soldPoliciesApi, type ApiSoldPolicy } from "@/lib/api";
+import { policiesApi, soldPoliciesApi, type ApiSoldPolicy } from "@/lib/api";
 import { errorText } from "./agent-ui";
 
 /** Refreshes every list that shows sold policies, for agents and (same browser) admins. */
@@ -64,8 +71,22 @@ function EditForm({ sale, onClose }: { sale: ApiSoldPolicy; onClose: () => void 
     inceptionDate: sale.inceptionDate,
     expiryDate: sale.expiryDate,
     premium: String(sale.premium),
+    policyNumber: sale.policyNumber,
+    premiumPayingTerm: sale.premiumPayingTerm ? String(sale.premiumPayingTerm) : "",
     insurerPolicyNumber: sale.insurerPolicyNumber ?? "",
   });
+  const [policyId, setPolicyId] = useState(sale.policy.id);
+  const isLife = sale.policy.insuranceType === "LIFE";
+  // Same line of business only (e.g. Two Wheeler <-> Four Wheeler within Motor).
+  const products = useQuery({
+    queryKey: agentKeys.policies({ edit: sale.policy.insuranceType }),
+    queryFn: () => policiesApi.list({ insuranceType: sale.policy.insuranceType, limit: 100 }),
+  });
+  const productOptions = [
+    ...(products.data?.data ?? []).map((p) => ({ id: p.id, name: p.policyName })),
+  ];
+  if (!productOptions.some((p) => p.id === sale.policy.id))
+    productOptions.unshift({ id: sale.policy.id, name: sale.policy.policyName });
   const [errors, setErrors] = useState<Partial<Record<keyof typeof form, string | undefined>>>({});
   // A new policy has no separate inception date: it simply follows the issue date.
   const inceptionFollowsIssue = sale.inceptionDate === sale.issueDate;
@@ -87,6 +108,11 @@ function EditForm({ sale, onClose }: { sale: ApiSoldPolicy; onClose: () => void 
           form.inceptionDate && form.inceptionDate !== form.issueDate ? form.inceptionDate : null,
         expiryDate: form.expiryDate,
         premium: Number(form.premium),
+        policyNumber: form.policyNumber.trim(),
+        ...(isLife
+          ? { premiumPayingTerm: form.premiumPayingTerm ? Number(form.premiumPayingTerm) : null }
+          : {}),
+        ...(policyId !== sale.policy.id ? { policyId } : {}),
         insurerPolicyNumber: form.insurerPolicyNumber.trim(),
       }),
     onSuccess: async () => {
@@ -105,6 +131,7 @@ function EditForm({ sale, onClose }: { sale: ApiSoldPolicy; onClose: () => void 
       problems.expiryDate = "Must be after the issue date.";
     if (form.inceptionDate && form.issueDate && form.inceptionDate > form.issueDate)
       problems.inceptionDate = "Cannot be after the issue date.";
+    if (!form.policyNumber.trim()) problems.policyNumber = "Required.";
     if (!(Number(form.premium) > 0)) problems.premium = "Enter the premium amount.";
     setErrors(problems);
     if (Object.keys(problems).length === 0) save.mutate();
@@ -148,6 +175,61 @@ function EditForm({ sale, onClose }: { sale: ApiSoldPolicy; onClose: () => void 
             )}
           </div>
         ))}
+        <div className="sm:col-span-2">
+          <Label className="text-xs font-bold uppercase tracking-wider">
+            Product / vehicle type
+          </Label>
+          <Select value={policyId} onValueChange={setPolicyId}>
+            <SelectTrigger className="mt-1 h-10 rounded-xl">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {productOptions.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="sm:col-span-2">
+          <Label htmlFor="edit-policyNumber" className="text-xs font-bold uppercase tracking-wider">
+            Policy number
+          </Label>
+          <Input
+            id="edit-policyNumber"
+            maxLength={60}
+            value={form.policyNumber}
+            onChange={(event) => set("policyNumber", event.target.value)}
+            aria-invalid={Boolean(errors.policyNumber)}
+            className={`mt-1 h-10 rounded-xl ${errors.policyNumber ? "border-destructive" : ""}`}
+          />
+          {errors.policyNumber && (
+            <p className="mt-1 text-xs font-medium text-destructive">{errors.policyNumber}</p>
+          )}
+        </div>
+        {isLife && (
+          <div className="sm:col-span-2">
+            <Label
+              htmlFor="edit-premiumPayingTerm"
+              className="text-xs font-bold uppercase tracking-wider"
+            >
+              Premium paying term (years)
+            </Label>
+            <Input
+              id="edit-premiumPayingTerm"
+              inputMode="numeric"
+              maxLength={3}
+              value={form.premiumPayingTerm}
+              onChange={(event) => set("premiumPayingTerm", event.target.value.replace(/\D/g, ""))}
+              className="mt-1 h-10 rounded-xl"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              After the last premium year the policy is marked Completed and is not offered for
+              renewal.
+            </p>
+          </div>
+        )}
         <div className="sm:col-span-2">
           <Label htmlFor="edit-insurer" className="text-xs font-bold uppercase tracking-wider">
             Insurer policy number

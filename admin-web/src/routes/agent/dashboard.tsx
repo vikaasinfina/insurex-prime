@@ -446,6 +446,7 @@ function RecentSales({
                             status={sale.policyStatus}
                             expiryDate={sale.expiryDate}
                             renewed={sale.isRenewed}
+                            completed={sale.isCompleted}
                           />
                         </div>
                         <p className="truncate text-xs text-muted-foreground">
@@ -500,7 +501,7 @@ function RecentSales({
                 {sales.map((sale) => (
                   <tr
                     key={sale.id}
-                    className={`transition-colors hover:bg-muted/40 ${expiryStatus(sale.expiryDate, sale.isRenewed).row}`}
+                    className={`transition-colors hover:bg-muted/40 ${expiryStatus(sale.expiryDate, sale.isRenewed, sale.isCompleted).row}`}
                   >
                     <td className={tdClass}>
                       <CodeChip>{sale.policyNumber}</CodeChip>
@@ -537,6 +538,7 @@ function RecentSales({
                         status={sale.policyStatus}
                         expiryDate={sale.expiryDate}
                         renewed={sale.isRenewed}
+                        completed={sale.isCompleted}
                       />
                     </td>
                     <td className={`${tdClass} text-right`}>

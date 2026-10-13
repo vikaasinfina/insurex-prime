@@ -261,7 +261,7 @@ export function SoldPoliciesLedger({
               </thead>
               <tbody className="divide-y divide-border/50 font-medium">
                 {rows.map((sale) => {
-                  const expiry = expiryStatus(sale.expiryDate, sale.isRenewed);
+                  const expiry = expiryStatus(sale.expiryDate, sale.isRenewed, sale.isCompleted);
                   return (
                     <tr
                       key={sale.id}
