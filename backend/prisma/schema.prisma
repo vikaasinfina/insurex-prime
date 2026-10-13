@@ -83,6 +83,19 @@ enum SoldPolicyStatus {
   CANCELLED
 }
 
+enum GoalCadence {
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum FieldNoteStatus {
+  IN_PROGRESS
+  COMPLETED
+  POSTPONED
+}
+
 enum PaymentMethod {
   CASH
   CARD
@@ -135,6 +148,9 @@ model Tenant {
   policies   Policy[]
   sold       SoldPolicy[]
   receipts   Receipt[]
+  salesGoals SalesGoal[]
+  fieldNotes FieldNote[]
+  meetings   Meeting[]
   auditLogs  AuditLog[]
 
   @@index([status])
@@ -204,11 +220,13 @@ model User {
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
 
-  tenant          Tenant?         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  agent           Agent?
-  auditLogs       AuditLog[]
-  agentSessions   AgentSession[]
-  updatedSettings SystemSetting[]
+  tenant            Tenant?           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  agent             Agent?
+  auditLogs         AuditLog[]
+  agentSessions     AgentSession[]
+  updatedSettings   SystemSetting[]
+  organizedMeetings Meeting[]         @relation("MeetingOrganizer")
+  meetingInvites    MeetingAttendee[]
 
   @@index([role])
   @@index([tenantId, role])
@@ -232,6 +250,8 @@ model Agent {
   user         User         @relation(fields: [userId], references: [id], onDelete: Restrict)
   customers    Customer[]
   soldPolicies SoldPolicy[]
+  salesGoals   SalesGoal[]
+  fieldNotes   FieldNote[]
 
   @@index([tenantId, status])
   @@index([status])
@@ -373,6 +393,98 @@ model Receipt {
 }
 
 /// A signed-in agent browser session. Only a SHA-256 hash of the cookie token is stored.
+/// An agent's recurring target for one line of business. The period is always the current
+/// week/month/quarter/year; progress is computed from the agent's sold policies. No row
+/// (or zero targets) means no goal is set. COMMERCIAL sales are not tracked by goals.
+model SalesGoal {
+  id             String        @id @default(uuid()) @db.Uuid
+  tenantId       String        @db.Uuid
+  agentId        String        @db.Uuid
+  cadence        GoalCadence
+  category       InsuranceType
+  targetPolicies Int
+  targetPremium  Decimal       @default(0) @db.Decimal(12, 2)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  agent  Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, cadence, category])
+  @@index([tenantId])
+  @@map("sales_goals")
+}
+
+/// A "sticky memo" an agent logs between customer visits, with an optional follow-up.
+model FieldNote {
+  id            String          @id @default(uuid()) @db.Uuid
+  tenantId      String          @db.Uuid
+  agentId       String          @db.Uuid
+  clientName    String
+  contactName   String          @default("")
+  phone         String          @default("")
+  coverage      String          @default("")
+  category      InsuranceType
+  note          String
+  /// Short label under the memo, e.g. "Sticky Note #104".
+  tag           String          @default("")
+  status        FieldNoteStatus @default(IN_PROGRESS)
+  followUpAt    DateTime?
+  followUpLabel String          @default("")
+  /// Set for recurring follow-ups, e.g. "Annual".
+  recurring     String?
+  loggedAt      DateTime        @default(now())
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  agent  Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, loggedAt])
+  @@index([agentId, status])
+  @@index([agentId, followUpAt])
+  @@index([tenantId])
+  @@map("field_notes")
+}
+
+/// A scheduled meeting. An admin invites agents; an agent invites the agency's admins.
+/// Only the organizer can change or cancel it.
+model Meeting {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  organizerId String   @db.Uuid
+  title       String
+  description String   @default("")
+  /// Google Meet / Zoom (or any https) join link.
+  meetingUrl  String   @default("")
+  /// Outside guests (any email) invited alongside the agents/admins.
+  guestEmails String[] @default([])
+  startsAt    DateTime
+  endsAt      DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  organizer User              @relation("MeetingOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
+  attendees MeetingAttendee[]
+
+  @@index([tenantId, startsAt])
+  @@index([organizerId, startsAt])
+  @@map("meetings")
+}
+
+model MeetingAttendee {
+  meetingId String @db.Uuid
+  userId    String @db.Uuid
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([meetingId, userId])
+  @@index([userId])
+  @@map("meeting_attendees")
+}
+
 model AgentSession {
   id         String    @id @default(uuid()) @db.Uuid
   userId     String    @db.Uuid

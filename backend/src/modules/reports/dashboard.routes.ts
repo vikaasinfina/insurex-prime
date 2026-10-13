@@ -1,7 +1,11 @@
 import { z } from "zod";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import type { FastifyRequest } from "fastify";
-import { isAdmin, requireAuth, requireTenantId } from "../../middleware/role.js";
+import {
+  isAdmin,
+  requireAuth,
+  requireTenantId,
+} from "../../middleware/role.js";
 import { errorResponses, ok, successSchema } from "../../utils/response.js";
 import { soldPolicySchema } from "../sold-policies/sold-policies.schemas.js";
 import {
@@ -27,12 +31,16 @@ import {
 
 const security = [{ bearerAuth: [] }];
 const tags = ["Dashboard"];
-const scopeNote = "Admins receive figures for the whole tenant; AGENT receives only their own.";
+const scopeNote =
+  "Admins receive figures for the whole tenant; AGENT receives only their own.";
 
 /** The role decides the scope — never a query parameter. */
 function scopeFor(request: FastifyRequest): AnalyticsScope {
   const auth = requireAuth(request);
-  return { tenantId: requireTenantId(auth), agentId: isAdmin(auth) ? null : auth.agentId };
+  return {
+    tenantId: requireTenantId(auth),
+    agentId: isAdmin(auth) ? null : auth.agentId,
+  };
 }
 
 export const dashboardRoutes: FastifyPluginAsyncZod = async (app) => {
@@ -50,7 +58,15 @@ export const dashboardRoutes: FastifyPluginAsyncZod = async (app) => {
         response: { 200: successSchema(summarySchema), ...errorResponses },
       },
     },
-    async (request) => ok(await getSummary(request.db, scopeFor(request), request.query)),
+    async (request) =>
+      ok(
+        await getSummary(
+          request.db,
+          scopeFor(request),
+          request.query,
+          request.query,
+        ),
+      ),
   );
 
   app.get(
@@ -65,7 +81,8 @@ export const dashboardRoutes: FastifyPluginAsyncZod = async (app) => {
         response: { 200: successSchema(salesSeriesSchema), ...errorResponses },
       },
     },
-    async (request) => ok(await getSalesOverTime(request.db, scopeFor(request), request.query)),
+    async (request) =>
+      ok(await getSalesOverTime(request.db, scopeFor(request), request.query)),
   );
 
   app.get(
@@ -81,7 +98,14 @@ export const dashboardRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request) =>
-      ok(await getPolicyDistribution(request.db, scopeFor(request), request.query)),
+      ok(
+        await getPolicyDistribution(
+          request.db,
+          scopeFor(request),
+          request.query,
+          request.query,
+        ),
+      ),
   );
 
   app.get(
@@ -93,10 +117,21 @@ export const dashboardRoutes: FastifyPluginAsyncZod = async (app) => {
         summary: "Sold policies per line by status",
         description: scopeNote,
         querystring: summaryQuerySchema,
-        response: { 200: successSchema(portfolioSummarySchema), ...errorResponses },
+        response: {
+          200: successSchema(portfolioSummarySchema),
+          ...errorResponses,
+        },
       },
     },
-    async (request) => ok(await getPortfolioSummary(request.db, scopeFor(request), request.query)),
+    async (request) =>
+      ok(
+        await getPortfolioSummary(
+          request.db,
+          scopeFor(request),
+          request.query,
+          request.query,
+        ),
+      ),
   );
 
   app.get(
@@ -108,11 +143,22 @@ export const dashboardRoutes: FastifyPluginAsyncZod = async (app) => {
         summary: "Top agents by premium, sales or customers",
         description: `${scopeNote} Agents receive a single row for themselves.`,
         querystring: agentPerformanceQuerySchema,
-        response: { 200: successSchema(z.array(agentPerformanceSchema)), ...errorResponses },
+        response: {
+          200: successSchema(z.array(agentPerformanceSchema)),
+          ...errorResponses,
+        },
       },
     },
     async (request) => {
-      const { items } = await getAgentPerformance(request.db, scopeFor(request), request.query);
+      const { status, ...query } = request.query;
+      const { items } = await getAgentPerformance(
+        request.db,
+        scopeFor(request),
+        {
+          ...query,
+          saleStatus: status,
+        },
+      );
       return ok(items);
     },
   );
@@ -126,9 +172,21 @@ export const dashboardRoutes: FastifyPluginAsyncZod = async (app) => {
         summary: "Most recent policy sales",
         description: scopeNote,
         querystring: recentSalesQuerySchema,
-        response: { 200: successSchema(z.array(soldPolicySchema)), ...errorResponses },
+        response: {
+          200: successSchema(z.array(soldPolicySchema)),
+          ...errorResponses,
+        },
       },
     },
-    async (request) => ok(await getRecentSales(request.db, scopeFor(request), request.query.limit)),
+    async (request) =>
+      ok(
+        await getRecentSales(
+          request.db,
+          scopeFor(request),
+          request.query.limit,
+          request.query,
+          request.query,
+        ),
+      ),
   );
 };

@@ -14,27 +14,35 @@ import type {
   SoldPolicyStatus,
 } from "./types";
 
-type Range = { from?: string; to?: string };
+type Range = { from?: string | undefined; to?: string | undefined };
+/** Optional dashboard filters; status is the live status (expiry-aware). */
+type Filters = {
+  insuranceType?: InsuranceType | undefined;
+  agentId?: string | undefined;
+  status?: "ACTIVE" | "PENDING" | "EXPIRED" | "RENEWED" | undefined;
+};
+type Query = Range & Filters;
 
 /** Platform dashboard (SUPER_ADMIN; agents use agentApi.dashboard). */
 export const dashboardApi = {
-  summary: (range?: Range) =>
+  summary: (range?: Query) =>
     apiRequest<DashboardSummary>("/dashboard/summary", { query: toQuery(range) }),
-  policySales: (
-    params?: Range & { interval?: "day" | "week" | "month"; insuranceType?: InsuranceType },
-  ) => apiRequest<SalesSeries>("/dashboard/policy-sales", { query: toQuery(params) }),
-  policyDistribution: (range?: Range) =>
+  policySales: (params?: Query & { interval?: "day" | "week" | "month" }) =>
+    apiRequest<SalesSeries>("/dashboard/policy-sales", { query: toQuery(params) }),
+  policyDistribution: (range?: Query) =>
     apiRequest<PolicyDistributionRow[]>("/dashboard/policy-distribution", {
       query: toQuery(range),
     }),
-  portfolioSummary: (range?: Range) =>
+  portfolioSummary: (range?: Query) =>
     apiRequest<PortfolioSummaryRow[]>("/dashboard/portfolio-summary", { query: toQuery(range) }),
   agentPerformance: (
-    params?: Range & { limit?: number; sortBy?: "premium" | "policiesSold" | "customers" },
+    params?: Query & { limit?: number; sortBy?: "premium" | "policiesSold" | "customers" },
   ) =>
     apiRequest<AgentPerformanceRow[]>("/dashboard/agent-performance", { query: toQuery(params) }),
-  recentSales: (limit = 10) =>
-    apiRequest<ApiSoldPolicy[]>("/dashboard/recent-sales", { query: { limit } }),
+  recentSales: (limit = 10, params?: Query) =>
+    apiRequest<ApiSoldPolicy[]>("/dashboard/recent-sales", {
+      query: { ...toQuery(params), limit },
+    }),
 };
 
 /** Reports (SUPER_ADMIN). */

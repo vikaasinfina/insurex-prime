@@ -4,7 +4,18 @@ import { MobileBottomNav } from "@/components/mobile/MobileBottomNav";
 import { SidebarToggle } from "@/components/SidebarToggle";
 import { useSidebarCollapsed } from "@/hooks/use-sidebar-collapsed";
 import { useState } from "react";
-import { LayoutDashboard, LogOut, Shield, ShoppingBag, UserRound, Users, X } from "lucide-react";
+import {
+  CalendarDays,
+  Flag,
+  LayoutDashboard,
+  LogOut,
+  Shield,
+  ShoppingBag,
+  StickyNote,
+  UserRound,
+  Users,
+  X,
+} from "lucide-react";
 import { initialsOf } from "@/lib/format";
 import { useAgentSession } from "./agent-session-context";
 
@@ -13,6 +24,9 @@ export const agentNavItems = [
   { label: "Customers", href: "/agent/customers", icon: Users },
   { label: "Policies", href: "/agent/policies", icon: Shield },
   { label: "Sold Policies", href: "/agent/sold-policies", icon: ShoppingBag },
+  { label: "Field Notes", href: "/agent/notes", icon: StickyNote },
+  { label: "Calendar", href: "/agent/calendar", icon: CalendarDays },
+  { label: "Goals", href: "/agent/goals", icon: Flag },
   { label: "Profile", href: "/agent/profile", icon: UserRound },
 ] as const;
 
@@ -174,6 +188,8 @@ export function AgentSidebar({ currentPath, isOpen, onClose }: AgentSidebarProps
         ]}
         more={[
           { label: "Policies", icon: Shield, href: "/agent/policies" },
+          { label: "Field Notes", icon: StickyNote, href: "/agent/notes" },
+          { label: "Goals", icon: Flag, href: "/agent/goals" },
           { label: "Profile", icon: UserRound, href: "/agent/profile" },
         ]}
         account={{ name: agent.fullName, role: `Agent · ${agent.agentCode}` }}

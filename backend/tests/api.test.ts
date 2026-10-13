@@ -266,7 +266,7 @@ describe.skipIf(!hasTestDatabase)("InsuroX API (PostgreSQL integration)", () => 
         expect(setCookie).toMatch(/insurex_agent_session=[A-Za-z0-9_-]{43};/);
         expect(setCookie).toMatch(/HttpOnly/);
         expect(setCookie).toMatch(/SameSite=Lax/);
-        expect(setCookie).toMatch(/Max-Age=43200/);
+        expect(setCookie).toMatch(/Max-Age=2592000/);
 
         const me = await call("GET", "/auth/me", sessionCookieFrom(headers["set-cookie"]));
         expect(me.status).toBe(200);

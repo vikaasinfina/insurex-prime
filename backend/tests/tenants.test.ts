@@ -175,7 +175,7 @@ describe.skipIf(!hasTestDatabase)("Multi-tenant platform (PostgreSQL integration
 
   it("loads the TATA AIG health catalog split into Indemnity and Deductible", async () => {
     const { catalog, cookie } = await activate(aigId, "Xyz", "owner@xyz.test");
-    expect(catalog).toMatchObject({ source: "TEMPLATE", categories: 2, policies: 4 });
+    expect(catalog).toMatchObject({ source: "TEMPLATE", categories: 2, policies: 6 });
     const tree = await call("GET", "/catalog/tree", cookie);
     const [health] = tree.body.data.insurers[0].lines;
     expect(health.line).toBe("HEALTH");
@@ -365,7 +365,7 @@ describe.skipIf(!hasTestDatabase)("Multi-tenant platform (PostgreSQL integration
     // Catalogs, analytics (raw SQL) and audit logs are per tenant too.
     const treeB = (await call("GET", "/catalog/tree", b.cookie)).body.data;
     expect(treeB.insurers[0].insurer.code).toBe("TATA_AIG");
-    expect(treeB.insurers[0].lines.map((l: { line: string }) => l.line)).toEqual(["HEALTH"]);
+    expect(treeB.insurers[0].lines.map((l: { line: string }) => l.line)).toEqual(["HEALTH", "MOTOR"]);
     expect((await call("GET", "/dashboard/summary", b.cookie)).body.data).toMatchObject({
       policiesSold: 0,
       totalPremium: 0,
@@ -380,7 +380,7 @@ describe.skipIf(!hasTestDatabase)("Multi-tenant platform (PostgreSQL integration
     const agentsReportB = (await call("GET", "/reports/agents", b.cookie)).body.data;
     expect(agentsReportB.map((r: { agentId: string }) => r.agentId)).toEqual([agentB.id]);
     const policiesReportB = (await call("GET", "/reports/policies", b.cookie)).body;
-    expect(policiesReportB.meta.total).toBe(4);
+    expect(policiesReportB.meta.total).toBe(6);
     const byType = (await call("GET", "/dashboard/policy-distribution", a.cookie)).body.data;
     expect(
       byType.find((row: { insuranceType: string }) => row.insuranceType === "LIFE"),
@@ -610,7 +610,7 @@ describe.skipIf(!hasTestDatabase)("Multi-tenant platform (PostgreSQL integration
     expect(added.body.data.catalog).toMatchObject({
       source: "TEMPLATE",
       categories: 2,
-      policies: 4,
+      policies: 6,
     });
     expect(
       added.body.data.tenant.insurers.map((i: { code: string; policies: number }) => [
@@ -619,7 +619,7 @@ describe.skipIf(!hasTestDatabase)("Multi-tenant platform (PostgreSQL integration
       ]),
     ).toEqual([
       ["TATA_AIA", 47],
-      ["TATA_AIG", 4],
+      ["TATA_AIG", 6],
     ]);
     // The same insurer twice, and a code taken by another tenant, are refused.
     expect(
@@ -669,7 +669,7 @@ describe.skipIf(!hasTestDatabase)("Multi-tenant platform (PostgreSQL integration
       "TATA_AIG",
     ]);
     expect(tree.insurers[0].lines.map((l: { line: string }) => l.line)).toEqual(["LIFE"]);
-    expect(tree.insurers[1].lines.map((l: { line: string }) => l.line)).toEqual(["HEALTH"]);
+    expect(tree.insurers[1].lines.map((l: { line: string }) => l.line)).toEqual(["HEALTH", "MOTOR"]);
     const filtered = (await call("GET", `/catalog/tree?insurerId=${aigId}`, agent.session)).body
       .data;
     expect(filtered.insurers).toHaveLength(1);

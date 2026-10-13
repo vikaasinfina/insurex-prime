@@ -7,6 +7,20 @@ export {
 } from "./client";
 export type { ListParams, Paginated, PaginationMeta } from "./client";
 export { agentApi, type AgentProfileInput } from "./agent";
+export {
+  agentGoalsApi,
+  type ApiGoalCategory,
+  type ApiGoalPeriod,
+  type ApiSalesGoals,
+  type GoalTargets,
+} from "./agent-goals";
+export {
+  fieldNotesApi,
+  type ApiFieldNote,
+  type FieldNoteInput,
+  type ParsedMemo,
+} from "./field-notes";
+export { meetingsApi, type ApiMeeting, type MeetingAgent, type MeetingInput } from "./meetings";
 export { agentsApi, type AgentInput } from "./agents";
 export {
   adminAuthApi,

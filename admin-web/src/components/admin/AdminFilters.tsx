@@ -18,16 +18,18 @@ export interface FilterState {
   dateRange: "All Time" | "7D" | "30D" | "6M" | "1Y";
   policyType: "All" | "Health" | "Motor" | "Life" | "Commercial";
   agent: string;
-  status: "All" | "Active" | "In Review" | "Expired";
+  status: "All" | "Active" | "Pending" | "Expired" | "Renewed";
 }
 
 export interface AdminFiltersProps {
   filters: FilterState;
+  /** Agents to choose from; the filter value is the agent's id. */
+  agents?: { id: string; name: string }[];
   onFilterChange: (key: keyof FilterState, value: string) => void;
   onReset: () => void;
 }
 
-export function AdminFilters({ filters, onFilterChange, onReset }: AdminFiltersProps) {
+export function AdminFilters({ filters, agents = [], onFilterChange, onReset }: AdminFiltersProps) {
   const isFiltered =
     filters.dateRange !== "All Time" ||
     filters.policyType !== "All" ||
@@ -184,11 +186,11 @@ export function AdminFilters({ filters, onFilterChange, onReset }: AdminFiltersP
                 className="h-9 w-full appearance-none rounded-xl border border-border bg-surface/50 pl-8 pr-7 text-xs font-medium text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
               >
                 <option value="All">Agent: All Field</option>
-                <option value="Agent 01">Agent 01 (Rajesh V.)</option>
-                <option value="Agent 02">Agent 02 (Priya S.)</option>
-                <option value="Agent 03">Agent 03 (Amit K.)</option>
-                <option value="Agent 04">Agent 04 (Sneha P.)</option>
-                <option value="Agent 05">Agent 05 (Vikram M.)</option>
+                {agents.map((agent) => (
+                  <option key={agent.id} value={agent.id}>
+                    {agent.name}
+                  </option>
+                ))}
               </SelectField>
             </div>
 
@@ -209,8 +211,9 @@ export function AdminFilters({ filters, onFilterChange, onReset }: AdminFiltersP
               >
                 <option value="All">Status: All Statuses</option>
                 <option value="Active">Active</option>
-                <option value="In Review">In Review</option>
+                <option value="Pending">Pending</option>
                 <option value="Expired">Expired</option>
+                <option value="Renewed">Renewed</option>
               </SelectField>
             </div>
 

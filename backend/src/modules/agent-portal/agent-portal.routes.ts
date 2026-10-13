@@ -12,6 +12,7 @@ import {
   agentProfileSchema,
   updateAgentProfileBodySchema,
 } from "./agent-portal.schemas.js";
+import { coachingBodySchema, coachingSchema, getCoaching } from "./coaching.service.js";
 import { getAgentDashboard, getAgentProfile, updateAgentProfile } from "./agent-portal.service.js";
 
 const security = [{ bearerAuth: [] }];
@@ -42,6 +43,30 @@ export const agentPortalRoutes: FastifyPluginAsyncZod = async (app) => {
           requireTenantId(requireAuth(request)),
           requireAgentId(requireAuth(request)),
           request.query.range,
+        ),
+      ),
+  );
+
+  app.post(
+    "/coaching",
+    {
+      schema: {
+        tags,
+        security,
+        summary: "AI sales coach: top 5 steps to convert business and reach the goal",
+        description:
+          "Sends only aggregated goal progress (no customer data) to Gemini and returns five steps. Falls back to a built-in checklist when no API key is configured or the call fails.",
+        body: coachingBodySchema,
+        response: { 200: successSchema(coachingSchema), ...errorResponses },
+      },
+    },
+    async (request) =>
+      ok(
+        await getCoaching(
+          app.config,
+          requireAgentId(requireAuth(request)),
+          request.body,
+          request.log,
         ),
       ),
   );

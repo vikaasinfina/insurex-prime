@@ -1,5 +1,9 @@
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
-import { requireAuth, requireTenantId, tenantAdminOnly } from "../../middleware/role.js";
+import {
+  requireAuth,
+  requireTenantId,
+  tenantAdminOnly,
+} from "../../middleware/role.js";
 import { buildMeta, toSkipTake } from "../../utils/pagination.js";
 import {
   errorResponses,
@@ -69,7 +73,10 @@ export const reportRoutes: FastifyPluginAsyncZod = async (app) => {
         security,
         summary: "Sales per catalog policy (SUPER_ADMIN)",
         querystring: policiesReportQuerySchema,
-        response: { 200: paginatedSchema(policyPerformanceSchema), ...errorResponses },
+        response: {
+          200: paginatedSchema(policyPerformanceSchema),
+          ...errorResponses,
+        },
       },
     },
     async (request) => {
@@ -83,7 +90,10 @@ export const reportRoutes: FastifyPluginAsyncZod = async (app) => {
           offset: skip,
         },
       );
-      return paginated(items, buildMeta(request.query.page, request.query.limit, total));
+      return paginated(
+        items,
+        buildMeta(request.query.page, request.query.limit, total),
+      );
     },
   );
 
@@ -95,7 +105,10 @@ export const reportRoutes: FastifyPluginAsyncZod = async (app) => {
         security,
         summary: "Performance per agent (SUPER_ADMIN)",
         querystring: agentsReportQuerySchema,
-        response: { 200: paginatedSchema(agentPerformanceSchema), ...errorResponses },
+        response: {
+          200: paginatedSchema(agentPerformanceSchema),
+          ...errorResponses,
+        },
       },
     },
     async (request) => {
@@ -105,7 +118,10 @@ export const reportRoutes: FastifyPluginAsyncZod = async (app) => {
         { tenantId: requireTenantId(requireAuth(request)), agentId: null },
         { ...request.query, limit: take, offset: skip },
       );
-      return paginated(items, buildMeta(request.query.page, request.query.limit, total));
+      return paginated(
+        items,
+        buildMeta(request.query.page, request.query.limit, total),
+      );
     },
   );
 };

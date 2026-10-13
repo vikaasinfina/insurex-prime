@@ -14,6 +14,9 @@ const TENANT_MODELS = new Set([
   "PolicyCategory",
   "SoldPolicy",
   "Receipt",
+  "SalesGoal",
+  "FieldNote",
+  "Meeting",
 ]);
 
 const FILTERED_OPERATIONS = new Set([

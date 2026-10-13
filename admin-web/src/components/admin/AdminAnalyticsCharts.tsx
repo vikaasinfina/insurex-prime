@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -13,6 +13,7 @@ import {
   YAxis,
 } from "recharts";
 import { adminKeys, liveQueryOptions } from "@/lib/admin-queries";
+import type { DashboardQuery } from "@/lib/dashboard-filters";
 import { dashboardApi, isApiConfigured, type InsuranceType } from "@/lib/api";
 import { formatINR, type PolicyDistributionItem, type SalesDataPoint } from "./admin-mock-data";
 
@@ -44,16 +45,28 @@ function periodLabel(period: string, interval: "day" | "week" | "month") {
 
 export interface AdminAnalyticsChartsProps {
   initialTimeframe?: Timeframe;
+  /** Dashboard filters (type, agent, status, and the date range for the distribution). */
+  filters?: DashboardQuery;
 }
 
-export function AdminAnalyticsCharts({ initialTimeframe = "30D" }: AdminAnalyticsChartsProps) {
+export function AdminAnalyticsCharts({
+  initialTimeframe = "30D",
+  filters = {},
+}: AdminAnalyticsChartsProps) {
   const [timeframe, setTimeframe] = useState<Timeframe>(initialTimeframe);
+  // A date chosen in the global filter moves the chart's window with it.
+  useEffect(() => setTimeframe(initialTimeframe), [initialTimeframe]);
   const { interval, days } = TIMEFRAMES[timeframe];
   const from = isoDay(new Date(Date.now() - days * 86_400_000));
+  const seriesFilters = {
+    insuranceType: filters.insuranceType,
+    agentId: filters.agentId,
+    status: filters.status,
+  };
 
   const sales = useQuery({
-    queryKey: adminKeys.policySales(interval, from),
-    queryFn: () => dashboardApi.policySales({ interval, from }),
+    queryKey: adminKeys.policySales(interval, { from, ...seriesFilters }),
+    queryFn: () => dashboardApi.policySales({ interval, from, ...seriesFilters }),
     enabled,
     ...liveQueryOptions,
   });
@@ -68,8 +81,8 @@ export function AdminAnalyticsCharts({ initialTimeframe = "30D" }: AdminAnalytic
   );
 
   const distribution = useQuery({
-    queryKey: adminKeys.policyDistribution,
-    queryFn: () => dashboardApi.policyDistribution(),
+    queryKey: adminKeys.policyDistribution(filters),
+    queryFn: () => dashboardApi.policyDistribution(filters),
     enabled,
     ...liveQueryOptions,
   });

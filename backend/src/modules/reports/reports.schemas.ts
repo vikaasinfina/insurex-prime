@@ -5,25 +5,38 @@ import {
   PaymentStatus,
   PolicyStatus,
 } from "../../generated/prisma/enums.js";
-import { dateRangeQuerySchema, paginationQuerySchema } from "../../utils/pagination.js";
+import {
+  dateRangeQuerySchema,
+  paginationQuerySchema,
+} from "../../utils/pagination.js";
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
 export const intervalSchema = z.enum(["day", "week", "month"]).default("month");
 
-export const summaryQuerySchema = dateRangeQuerySchema;
+/** Optional dashboard filters; the status is the live status (see liveStatusWhere). */
+const dashboardFilterShape = {
+  insuranceType: z.enum(InsuranceType).optional(),
+  agentId: z.uuid().optional(),
+  status: z.enum(["ACTIVE", "PENDING", "EXPIRED", "RENEWED"]).optional(),
+};
+
+export const summaryQuerySchema =
+  dateRangeQuerySchema.extend(dashboardFilterShape);
 
 export const salesQuerySchema = dateRangeQuerySchema.extend({
   interval: intervalSchema,
-  insuranceType: z.enum(InsuranceType).optional(),
+  ...dashboardFilterShape,
 });
 
 export const agentPerformanceQuerySchema = dateRangeQuerySchema.extend({
   limit: z.coerce.number().int().min(1).max(50).default(10),
   sortBy: z.enum(["premium", "policiesSold", "customers"]).default("premium"),
+  ...dashboardFilterShape,
 });
 
-export const recentSalesQuerySchema = z.object({
+export const recentSalesQuerySchema = dateRangeQuerySchema.extend({
   limit: z.coerce.number().int().min(1).max(50).default(10),
+  ...dashboardFilterShape,
 });
 
 export const salesReportQuerySchema = salesQuerySchema.extend({
@@ -35,26 +48,36 @@ export const policiesReportQuerySchema = paginationQuerySchema
   .extend({
     insuranceType: z.enum(InsuranceType).optional(),
     status: z.enum(PolicyStatus).optional(),
-    sortBy: z.enum(["policiesSold", "premium", "policyName"]).default("policiesSold"),
+    sortBy: z
+      .enum(["policiesSold", "premium", "policyName"])
+      .default("policiesSold"),
   });
 
 export const agentsReportQuerySchema = paginationQuerySchema
   .extend(dateRangeQuerySchema.shape)
   .extend({
     status: z.enum(AgentStatus).optional(),
-    sortBy: z.enum(["premium", "policiesSold", "customers", "fullName"]).default("premium"),
+    sortBy: z
+      .enum(["premium", "policiesSold", "customers", "fullName"])
+      .default("premium"),
   });
 
 // ─── Responses ────────────────────────────────────────────────────────────────
 export const summarySchema = z
   .object({
-    totalPolicies: z.number().int().describe("Catalog policies (ACTIVE only for agents)"),
+    totalPolicies: z
+      .number()
+      .int()
+      .describe("Catalog policies (ACTIVE only for agents)"),
     activePolicies: z.number().int().describe("ACTIVE catalog policies"),
     policiesSold: z.number().int(),
     activeSoldPolicies: z.number().int(),
     pendingSoldPolicies: z.number().int(),
     expiredSoldPolicies: z.number().int(),
-    renewedSoldPolicies: z.number().int().describe("Sales a later sale has renewed"),
+    renewedSoldPolicies: z
+      .number()
+      .int()
+      .describe("Sales a later sale has renewed"),
     cancelledSoldPolicies: z.number().int(),
     totalPremium: z.number().describe("Premium of non-cancelled sold policies"),
     premiumCollected: z.number().describe("Sum of PAID receipts"),
@@ -139,7 +162,9 @@ export const salesReportSchema = z
     timeline: salesSeriesSchema,
     byType: distributionSchema,
     byPolicyStatus: z.array(
-      breakdownRow(z.enum(["ACTIVE", "PENDING", "EXPIRED", "RENEWED", "CANCELLED"])),
+      breakdownRow(
+        z.enum(["ACTIVE", "PENDING", "EXPIRED", "RENEWED", "CANCELLED"]),
+      ),
     ),
     byPaymentStatus: z.array(breakdownRow(z.enum(PaymentStatus))),
   })

@@ -23,7 +23,12 @@ import {
 import { dashboardApi, isApiConfigured, type DashboardSummary } from "@/lib/api";
 import { insuranceTypeLabel } from "@/lib/format";
 import { adminKeys, liveQueryOptions } from "@/lib/admin-queries";
-import { useAdminAgentPerformance, useAdminRecentSales } from "@/hooks/use-admin-live-data";
+import { toDashboardQuery } from "@/lib/dashboard-filters";
+import {
+  useAdminAgentPerformance,
+  useAdminAgents,
+  useAdminRecentSales,
+} from "@/hooks/use-admin-live-data";
 import { AdminFooter } from "@/components/admin/AdminFooter";
 
 const NO_SALES: RecentPolicySale[] = [];
@@ -91,44 +96,16 @@ function SuperAdminDashboard() {
     });
   };
 
-  // Filtered recent policies
-  const liveSales = useAdminRecentSales(10).sales;
-  const liveAgents = useAdminAgentPerformance(10).agents;
-  const salesSource = liveSales ?? NO_SALES;
-  const agentsSource = liveAgents ?? NO_AGENTS;
-
-  const filteredPolicies: RecentPolicySale[] = useMemo(() => {
-    return salesSource.filter((item) => {
-      // Policy Type filter
-      if (filters.policyType !== "All" && item.policyType !== filters.policyType) {
-        return false;
-      }
-      // Agent filter
-      if (filters.agent !== "All" && item.agentName !== filters.agent) {
-        return false;
-      }
-      // Status filter
-      if (filters.status !== "All" && item.status !== filters.status) {
-        return false;
-      }
-      return true;
-    });
-  }, [salesSource, filters]);
-
-  // Filtered agents
-  const filteredAgents: AgentPerformanceRecord[] = useMemo(() => {
-    return agentsSource.filter((agent) => {
-      if (filters.agent !== "All" && agent.name !== filters.agent) {
-        return false;
-      }
-      return true;
-    });
-  }, [agentsSource, filters.agent]);
+  // Every figure on the page is computed by the backend for the selected filters.
+  const query = useMemo(() => toDashboardQuery(filters), [filters]);
+  const agentOptions = useAdminAgents().data?.data ?? [];
+  const salesSource = useAdminRecentSales(10, query).sales ?? NO_SALES;
+  const agentsSource = useAdminAgentPerformance(10, query).agents ?? NO_AGENTS;
 
   // KPI cards and the portfolio matrix show real backend figures only.
   const liveSummary = useQuery({
-    queryKey: adminKeys.summary,
-    queryFn: () => dashboardApi.summary(),
+    queryKey: adminKeys.summary(query),
+    queryFn: () => dashboardApi.summary(query),
     enabled: isApiConfigured && typeof window !== "undefined",
     ...liveQueryOptions,
   });
@@ -138,8 +115,8 @@ function SuperAdminDashboard() {
   );
 
   const portfolio = useQuery({
-    queryKey: adminKeys.portfolioSummary,
-    queryFn: () => dashboardApi.portfolioSummary(),
+    queryKey: adminKeys.portfolioSummary(query),
+    queryFn: () => dashboardApi.portfolioSummary(query),
     enabled: isApiConfigured && typeof window !== "undefined",
     ...liveQueryOptions,
   });
@@ -180,6 +157,7 @@ function SuperAdminDashboard() {
           <div className="max-lg:order-1">
             <AdminFilters
               filters={filters}
+              agents={agentOptions.map((agent) => ({ id: agent.id, name: agent.fullName }))}
               onFilterChange={handleFilterChange}
               onReset={handleResetFilters}
             />
@@ -191,6 +169,7 @@ function SuperAdminDashboard() {
 
           <div className="max-lg:order-4">
             <AdminAnalyticsCharts
+              filters={query}
               initialTimeframe={
                 filters.dateRange === "7D"
                   ? "7D"
@@ -216,11 +195,11 @@ function SuperAdminDashboard() {
           </div>
 
           <div className="max-lg:order-7">
-            <AdminAgentPerformanceTable agents={filteredAgents} />
+            <AdminAgentPerformanceTable agents={agentsSource} />
           </div>
 
           <div className="max-lg:order-6">
-            <AdminRecentSalesTable policies={filteredPolicies} />
+            <AdminRecentSalesTable policies={salesSource} />
           </div>
         </main>
         <AdminFooter />

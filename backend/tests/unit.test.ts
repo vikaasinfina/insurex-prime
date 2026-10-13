@@ -157,7 +157,7 @@ describe("agent password sign-in", () => {
     expect(loadEnv(baseEnv)).toMatchObject({
       AGENT_COOKIE_SECURE: false,
       AGENT_COOKIE_SAMESITE: "lax",
-      AGENT_SESSION_TTL_HOURS: 12,
+      AGENT_SESSION_TTL_HOURS: 720,
     });
     expect(loadEnv({ ...baseEnv, NODE_ENV: "production" }).AGENT_COOKIE_SECURE).toBe(true);
     expect(() => loadEnv({ ...baseEnv, AGENT_COOKIE_SAMESITE: "none" })).toThrow(

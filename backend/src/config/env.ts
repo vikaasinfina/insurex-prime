@@ -65,12 +65,25 @@ const envSchema = z
     RESEND_API_KEY: optionalString,
     RESEND_FROM_EMAIL: optionalString,
     RESEND_FROM_NAME: z.string().trim().min(1).default("InsuroX Prime"),
+    // Address meeting invitations are sent from (must be on a domain verified in Resend, e.g.
+    // noreply@kempanna.com). The sender's name is shown as the display name. Defaults to RESEND_FROM_EMAIL.
+    MEETING_FROM_EMAIL: optionalString,
     // Signs password-reset links (HMAC). At least 32 characters; unset disables forgot-password.
     PASSWORD_RESET_SECRET: optionalString.refine(
       (value) => value === undefined || value.length >= 32,
       "must be at least 32 characters",
     ),
     PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().min(5).max(1440).default(30),
+    // Google AI Studio (Gemini) key for the agent sales coach. Server-side only; without it the
+    // coach serves a built-in checklist instead.
+    GEMINI_API_KEY: optionalString,
+    // One model or a comma-separated list, tried in order when one is out of quota. The free tier
+    // allows only 20 requests per model per day, so a list stretches it; enable billing for real use.
+    GEMINI_MODEL: z
+      .string()
+      .trim()
+      .min(1)
+      .default("gemini-flash-latest,gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite"),
   })
   .superRefine((env, ctx) => {
     if (Boolean(env.FIREBASE_CLIENT_EMAIL) !== Boolean(env.FIREBASE_PRIVATE_KEY)) {

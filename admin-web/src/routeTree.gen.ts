@@ -14,6 +14,7 @@ import { Route as AgentRouteRouteImport } from './routes/agent/route'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AdminAgentsRouteImport } from './routes/admin/agents'
+import { Route as AdminCalendarRouteImport } from './routes/admin/calendar'
 import { Route as AdminCatalogRouteImport } from './routes/admin/catalog'
 import { Route as AdminChangePasswordRouteImport } from './routes/admin/change-password'
 import { Route as AdminCustomersRouteImport } from './routes/admin/customers'
@@ -25,9 +26,12 @@ import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminSoldPoliciesRouteImport } from './routes/admin/sold-policies'
 import { Route as AdminTenantsRouteImport } from './routes/admin/tenants'
 import { Route as AgentIndexRouteImport } from './routes/agent/index'
+import { Route as AgentCalendarRouteImport } from './routes/agent/calendar'
 import { Route as AgentChangePasswordRouteImport } from './routes/agent/change-password'
 import { Route as AgentCustomersRouteImport } from './routes/agent/customers'
 import { Route as AgentDashboardRouteImport } from './routes/agent/dashboard'
+import { Route as AgentGoalsRouteImport } from './routes/agent/goals'
+import { Route as AgentNotesRouteImport } from './routes/agent/notes'
 import { Route as AgentPoliciesRouteImport } from './routes/agent/policies'
 import { Route as AgentProfileRouteImport } from './routes/agent/profile'
 import { Route as AgentSellPolicyRouteImport } from './routes/agent/sell-policy'
@@ -56,6 +60,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
 const AdminAgentsRoute = AdminAgentsRouteImport.update({
   id: '/admin/agents',
   path: '/admin/agents',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminCalendarRoute = AdminCalendarRouteImport.update({
+  id: '/admin/calendar',
+  path: '/admin/calendar',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminCatalogRoute = AdminCatalogRouteImport.update({
@@ -113,6 +122,11 @@ const AgentIndexRoute = AgentIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AgentRouteRoute,
 } as any)
+const AgentCalendarRoute = AgentCalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
+  getParentRoute: () => AgentRouteRoute,
+} as any)
 const AgentChangePasswordRoute = AgentChangePasswordRouteImport.update({
   id: '/change-password',
   path: '/change-password',
@@ -126,6 +140,16 @@ const AgentCustomersRoute = AgentCustomersRouteImport.update({
 const AgentDashboardRoute = AgentDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AgentRouteRoute,
+} as any)
+const AgentGoalsRoute = AgentGoalsRouteImport.update({
+  id: '/goals',
+  path: '/goals',
+  getParentRoute: () => AgentRouteRoute,
+} as any)
+const AgentNotesRoute = AgentNotesRouteImport.update({
+  id: '/notes',
+  path: '/notes',
   getParentRoute: () => AgentRouteRoute,
 } as any)
 const AgentPoliciesRoute = AgentPoliciesRouteImport.update({
@@ -155,6 +179,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/admin/agents': typeof AdminAgentsRoute
+  '/admin/calendar': typeof AdminCalendarRoute
   '/admin/catalog': typeof AdminCatalogRoute
   '/admin/change-password': typeof AdminChangePasswordRoute
   '/admin/customers': typeof AdminCustomersRoute
@@ -165,9 +190,12 @@ export interface FileRoutesByFullPath {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/sold-policies': typeof AdminSoldPoliciesRoute
   '/admin/tenants': typeof AdminTenantsRoute
+  '/agent/calendar': typeof AgentCalendarRoute
   '/agent/change-password': typeof AgentChangePasswordRoute
   '/agent/customers': typeof AgentCustomersRoute
   '/agent/dashboard': typeof AgentDashboardRoute
+  '/agent/goals': typeof AgentGoalsRoute
+  '/agent/notes': typeof AgentNotesRoute
   '/agent/policies': typeof AgentPoliciesRoute
   '/agent/profile': typeof AgentProfileRoute
   '/agent/sell-policy': typeof AgentSellPolicyRoute
@@ -179,6 +207,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/admin/agents': typeof AdminAgentsRoute
+  '/admin/calendar': typeof AdminCalendarRoute
   '/admin/catalog': typeof AdminCatalogRoute
   '/admin/change-password': typeof AdminChangePasswordRoute
   '/admin/customers': typeof AdminCustomersRoute
@@ -189,9 +218,12 @@ export interface FileRoutesByTo {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/sold-policies': typeof AdminSoldPoliciesRoute
   '/admin/tenants': typeof AdminTenantsRoute
+  '/agent/calendar': typeof AgentCalendarRoute
   '/agent/change-password': typeof AgentChangePasswordRoute
   '/agent/customers': typeof AgentCustomersRoute
   '/agent/dashboard': typeof AgentDashboardRoute
+  '/agent/goals': typeof AgentGoalsRoute
+  '/agent/notes': typeof AgentNotesRoute
   '/agent/policies': typeof AgentPoliciesRoute
   '/agent/profile': typeof AgentProfileRoute
   '/agent/sell-policy': typeof AgentSellPolicyRoute
@@ -205,6 +237,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/admin/agents': typeof AdminAgentsRoute
+  '/admin/calendar': typeof AdminCalendarRoute
   '/admin/catalog': typeof AdminCatalogRoute
   '/admin/change-password': typeof AdminChangePasswordRoute
   '/admin/customers': typeof AdminCustomersRoute
@@ -215,9 +248,12 @@ export interface FileRoutesById {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/sold-policies': typeof AdminSoldPoliciesRoute
   '/admin/tenants': typeof AdminTenantsRoute
+  '/agent/calendar': typeof AgentCalendarRoute
   '/agent/change-password': typeof AgentChangePasswordRoute
   '/agent/customers': typeof AgentCustomersRoute
   '/agent/dashboard': typeof AgentDashboardRoute
+  '/agent/goals': typeof AgentGoalsRoute
+  '/agent/notes': typeof AgentNotesRoute
   '/agent/policies': typeof AgentPoliciesRoute
   '/agent/profile': typeof AgentProfileRoute
   '/agent/sell-policy': typeof AgentSellPolicyRoute
@@ -232,6 +268,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/admin/agents'
+    | '/admin/calendar'
     | '/admin/catalog'
     | '/admin/change-password'
     | '/admin/customers'
@@ -242,9 +279,12 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/sold-policies'
     | '/admin/tenants'
+    | '/agent/calendar'
     | '/agent/change-password'
     | '/agent/customers'
     | '/agent/dashboard'
+    | '/agent/goals'
+    | '/agent/notes'
     | '/agent/policies'
     | '/agent/profile'
     | '/agent/sell-policy'
@@ -256,6 +296,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/admin/agents'
+    | '/admin/calendar'
     | '/admin/catalog'
     | '/admin/change-password'
     | '/admin/customers'
@@ -266,9 +307,12 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/sold-policies'
     | '/admin/tenants'
+    | '/agent/calendar'
     | '/agent/change-password'
     | '/agent/customers'
     | '/agent/dashboard'
+    | '/agent/goals'
+    | '/agent/notes'
     | '/agent/policies'
     | '/agent/profile'
     | '/agent/sell-policy'
@@ -281,6 +325,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/admin/agents'
+    | '/admin/calendar'
     | '/admin/catalog'
     | '/admin/change-password'
     | '/admin/customers'
@@ -291,9 +336,12 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/sold-policies'
     | '/admin/tenants'
+    | '/agent/calendar'
     | '/agent/change-password'
     | '/agent/customers'
     | '/agent/dashboard'
+    | '/agent/goals'
+    | '/agent/notes'
     | '/agent/policies'
     | '/agent/profile'
     | '/agent/sell-policy'
@@ -307,6 +355,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   AdminAgentsRoute: typeof AdminAgentsRoute
+  AdminCalendarRoute: typeof AdminCalendarRoute
   AdminCatalogRoute: typeof AdminCatalogRoute
   AdminChangePasswordRoute: typeof AdminChangePasswordRoute
   AdminCustomersRoute: typeof AdminCustomersRoute
@@ -354,6 +403,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/agents'
       fullPath: '/admin/agents'
       preLoaderRoute: typeof AdminAgentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/calendar': {
+      id: '/admin/calendar'
+      path: '/admin/calendar'
+      fullPath: '/admin/calendar'
+      preLoaderRoute: typeof AdminCalendarRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/catalog': {
@@ -433,6 +489,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentIndexRouteImport
       parentRoute: typeof AgentRouteRoute
     }
+    '/agent/calendar': {
+      id: '/agent/calendar'
+      path: '/calendar'
+      fullPath: '/agent/calendar'
+      preLoaderRoute: typeof AgentCalendarRouteImport
+      parentRoute: typeof AgentRouteRoute
+    }
     '/agent/change-password': {
       id: '/agent/change-password'
       path: '/change-password'
@@ -452,6 +515,20 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/agent/dashboard'
       preLoaderRoute: typeof AgentDashboardRouteImport
+      parentRoute: typeof AgentRouteRoute
+    }
+    '/agent/goals': {
+      id: '/agent/goals'
+      path: '/goals'
+      fullPath: '/agent/goals'
+      preLoaderRoute: typeof AgentGoalsRouteImport
+      parentRoute: typeof AgentRouteRoute
+    }
+    '/agent/notes': {
+      id: '/agent/notes'
+      path: '/notes'
+      fullPath: '/agent/notes'
+      preLoaderRoute: typeof AgentNotesRouteImport
       parentRoute: typeof AgentRouteRoute
     }
     '/agent/policies': {
@@ -486,9 +563,12 @@ declare module '@tanstack/react-router' {
 }
 
 interface AgentRouteRouteChildren {
+  AgentCalendarRoute: typeof AgentCalendarRoute
   AgentChangePasswordRoute: typeof AgentChangePasswordRoute
   AgentCustomersRoute: typeof AgentCustomersRoute
   AgentDashboardRoute: typeof AgentDashboardRoute
+  AgentGoalsRoute: typeof AgentGoalsRoute
+  AgentNotesRoute: typeof AgentNotesRoute
   AgentPoliciesRoute: typeof AgentPoliciesRoute
   AgentProfileRoute: typeof AgentProfileRoute
   AgentSellPolicyRoute: typeof AgentSellPolicyRoute
@@ -497,9 +577,12 @@ interface AgentRouteRouteChildren {
 }
 
 const AgentRouteRouteChildren: AgentRouteRouteChildren = {
+  AgentCalendarRoute: AgentCalendarRoute,
   AgentChangePasswordRoute: AgentChangePasswordRoute,
   AgentCustomersRoute: AgentCustomersRoute,
   AgentDashboardRoute: AgentDashboardRoute,
+  AgentGoalsRoute: AgentGoalsRoute,
+  AgentNotesRoute: AgentNotesRoute,
   AgentPoliciesRoute: AgentPoliciesRoute,
   AgentProfileRoute: AgentProfileRoute,
   AgentSellPolicyRoute: AgentSellPolicyRoute,
@@ -517,6 +600,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   AdminAgentsRoute: AdminAgentsRoute,
+  AdminCalendarRoute: AdminCalendarRoute,
   AdminCatalogRoute: AdminCatalogRoute,
   AdminChangePasswordRoute: AdminChangePasswordRoute,
   AdminCustomersRoute: AdminCustomersRoute,

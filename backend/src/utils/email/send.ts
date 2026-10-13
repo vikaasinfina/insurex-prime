@@ -6,6 +6,12 @@ export interface EmailMessage {
   subject: string;
   text: string;
   html: string;
+  /** Overrides the configured sender display name (e.g. the person who scheduled a meeting). */
+  fromName?: string;
+  /** Overrides the configured sender address; must be on a domain verified in Resend. */
+  fromEmail?: string;
+  /** Where replies go. */
+  replyTo?: string;
 }
 
 export const isEmailConfigured = (config: Pick<Env, "RESEND_API_KEY" | "RESEND_FROM_EMAIL">) =>
@@ -29,7 +35,8 @@ export async function sendEmail(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: `${config.RESEND_FROM_NAME} <${config.RESEND_FROM_EMAIL}>`,
+      from: `${(message.fromName ?? config.RESEND_FROM_NAME).replace(/[<>"\r\n]/g, "")} <${message.fromEmail ?? config.RESEND_FROM_EMAIL}>`,
+      ...(message.replyTo ? { reply_to: message.replyTo } : {}),
       to: [message.to],
       subject: message.subject,
       text: message.text,

@@ -10,15 +10,16 @@ import {
   type ApiSoldPolicy,
   type SoldPolicyListParams,
 } from "@/lib/api";
+import type { DashboardQuery } from "@/lib/dashboard-filters";
 import { toAgentPerformance, toCustomer, toRecentSale } from "@/lib/api/admin-mappers";
 
 // Queries only run in the browser: the admin token lives in the Firebase client session.
 const enabled = isApiConfigured && typeof window !== "undefined";
 
-export function useAdminRecentSales(limit = 10) {
+export function useAdminRecentSales(limit = 10, filters: DashboardQuery = {}) {
   const query = useQuery({
-    queryKey: adminKeys.recentSales(limit),
-    queryFn: () => dashboardApi.recentSales(limit),
+    queryKey: adminKeys.recentSales(limit, filters),
+    queryFn: () => dashboardApi.recentSales(limit, filters),
     enabled,
     ...liveQueryOptions,
   });
@@ -26,10 +27,10 @@ export function useAdminRecentSales(limit = 10) {
   return { query, sales };
 }
 
-export function useAdminAgentPerformance(limit = 10) {
+export function useAdminAgentPerformance(limit = 10, filters: DashboardQuery = {}) {
   const query = useQuery({
-    queryKey: adminKeys.agentPerformance(limit),
-    queryFn: () => dashboardApi.agentPerformance({ limit }),
+    queryKey: adminKeys.agentPerformance(limit, filters),
+    queryFn: () => dashboardApi.agentPerformance({ limit, ...filters }),
     enabled,
     ...liveQueryOptions,
   });

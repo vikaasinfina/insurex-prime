@@ -1,6 +1,10 @@
 import type { Database } from "../../config/database.js";
 import { Prisma } from "../../generated/prisma/client.js";
-import type { InsuranceType, PolicyStatus, AgentStatus } from "../../generated/prisma/enums.js";
+import type {
+  InsuranceType,
+  PolicyStatus,
+  AgentStatus,
+} from "../../generated/prisma/enums.js";
 import { badRequest } from "../../utils/errors.js";
 import { parseDateOnly, toDateOnly, toNumber } from "../../utils/format.js";
 import { toDateFilter } from "../../utils/pagination.js";
@@ -23,6 +27,13 @@ export interface DateRangeInput {
   to?: string | undefined;
 }
 
+/** Optional dashboard filters. Agents are always scoped to themselves regardless of agentId. */
+export interface DashboardFilters {
+  insuranceType?: InsuranceType | undefined;
+  agentId?: string | undefined;
+  status?: LiveStatus | undefined;
+}
+
 // ─── SQL helpers ──────────────────────────────────────────────────────────────
 // Bounds are passed as text and cast in SQL so results never depend on the
 // database session's timezone.
@@ -36,7 +47,8 @@ function toSqlBounds(range: DateRangeInput): SqlBounds {
   if (!filter) return {};
   const bounds: SqlBounds = {};
   if (filter.gte) bounds.fromDate = toDateOnly(filter.gte);
-  const end = filter.lt ?? (filter.lte ? new Date(filter.lte.getTime() + 1) : undefined);
+  const end =
+    filter.lt ?? (filter.lte ? new Date(filter.lte.getTime() + 1) : undefined);
   if (end) {
     // Round a datetime upper bound up to the next whole day for DATE columns.
     const day = new Date(`${toDateOnly(end)}T00:00:00.000Z`);
@@ -46,10 +58,20 @@ function toSqlBounds(range: DateRangeInput): SqlBounds {
   return bounds;
 }
 
+/** The live status of a sale today (see liveStatusWhere): renewed, else expired by date, else stored. */
+const LIVE_STATUS_SQL = Prisma.sql`CASE
+  WHEN EXISTS (
+    SELECT 1 FROM sold_policies r
+    WHERE r."renewedFromId" = sp.id AND r."policyStatus"::text <> 'CANCELLED'
+  ) THEN 'RENEWED'
+  WHEN sp."expiryDate" < CURRENT_DATE THEN 'EXPIRED'
+  ELSE sp."policyStatus"::text
+END`;
+
 function soldPolicyConditions(
   scope: AnalyticsScope,
   bounds: SqlBounds,
-  extra: { insuranceType?: InsuranceType | undefined; agentId?: string | undefined } = {},
+  extra: DashboardFilters = {},
 ) {
   const conditions: Prisma.Sql[] = [
     Prisma.sql`sp."tenantId" = ${scope.tenantId}::uuid`,
@@ -57,28 +79,53 @@ function soldPolicyConditions(
   ];
   const agentId = scope.agentId ?? extra.agentId;
   if (agentId) conditions.push(Prisma.sql`sp."agentId" = ${agentId}::uuid`);
-  if (bounds.fromDate) conditions.push(Prisma.sql`sp."issueDate" >= ${bounds.fromDate}::date`);
+  if (bounds.fromDate)
+    conditions.push(Prisma.sql`sp."issueDate" >= ${bounds.fromDate}::date`);
   if (bounds.toDateExclusive) {
-    conditions.push(Prisma.sql`sp."issueDate" < ${bounds.toDateExclusive}::date`);
+    conditions.push(
+      Prisma.sql`sp."issueDate" < ${bounds.toDateExclusive}::date`,
+    );
   }
   if (extra.insuranceType) {
-    conditions.push(Prisma.sql`p."insuranceType"::text = ${extra.insuranceType}`);
+    conditions.push(
+      Prisma.sql`p."insuranceType"::text = ${extra.insuranceType}`,
+    );
   }
+  if (extra.status)
+    conditions.push(Prisma.sql`(${LIVE_STATUS_SQL}) = ${extra.status}`);
   return Prisma.join(conditions, " AND ");
 }
 
-const num = (value: unknown) => (value === null || value === undefined ? 0 : Number(value));
+const num = (value: unknown) =>
+  value === null || value === undefined ? 0 : Number(value);
 
 // ─── Summary ──────────────────────────────────────────────────────────────────
-export async function getSummary(db: Database, scope: AnalyticsScope, range: DateRangeInput) {
+export async function getSummary(
+  db: Database,
+  scope: AnalyticsScope,
+  range: DateRangeInput,
+  filters: DashboardFilters = {},
+) {
   const issueDate = toDateFilter(range);
-  const soldWhere: Prisma.SoldPolicyWhereInput = {
-    ...(scope.agentId ? { agentId: scope.agentId } : {}),
-    ...(issueDate ? { issueDate } : {}),
-  };
   const today = parseDateOnly(new Date().toISOString());
+  const agentId = scope.agentId ?? filters.agentId;
+  const soldWhere: Prisma.SoldPolicyWhereInput = {
+    ...(agentId ? { agentId } : {}),
+    ...(issueDate ? { issueDate } : {}),
+    ...(filters.insuranceType
+      ? { policy: { insuranceType: filters.insuranceType } }
+      : {}),
+    ...(filters.status
+      ? { AND: [liveStatusWhere(filters.status, today)] }
+      : {}),
+  };
   const live = (status: LiveStatus) =>
-    db.soldPolicy.count({ where: { ...soldWhere, ...liveStatusWhere(status, today) } });
+    db.soldPolicy.count({
+      where: { AND: [soldWhere, liveStatusWhere(status, today)] },
+    });
+  const catalogWhere: Prisma.PolicyWhereInput = filters.insuranceType
+    ? { insuranceType: filters.insuranceType }
+    : {};
   const [
     totalPolicies,
     activePolicies,
@@ -93,9 +140,17 @@ export async function getSummary(db: Database, scope: AnalyticsScope, range: Dat
     liveRenewed,
   ] = await Promise.all([
     // Agents only see the catalog they can sell from.
-    db.policy.count({ where: scope.agentId ? { status: "ACTIVE" } : {} }),
-    db.policy.count({ where: { status: "ACTIVE" } }),
-    db.soldPolicy.groupBy({ by: ["policyStatus"], where: soldWhere, _count: { _all: true } }),
+    db.policy.count({
+      where: scope.agentId
+        ? { ...catalogWhere, status: "ACTIVE" }
+        : catalogWhere,
+    }),
+    db.policy.count({ where: { ...catalogWhere, status: "ACTIVE" } }),
+    db.soldPolicy.groupBy({
+      by: ["policyStatus"],
+      where: soldWhere,
+      _count: { _all: true },
+    }),
     db.soldPolicy.aggregate({
       where: { ...soldWhere, policyStatus: { not: "CANCELLED" } },
       _sum: { premium: true },
@@ -104,8 +159,10 @@ export async function getSummary(db: Database, scope: AnalyticsScope, range: Dat
       where: { paymentStatus: "PAID", soldPolicy: soldWhere },
       _sum: { amount: true },
     }),
-    scope.agentId ? Promise.resolve(null) : db.agent.count(),
-    db.customer.count({ where: scope.agentId ? { assignedAgentId: scope.agentId } : {} }),
+    scope.agentId
+      ? Promise.resolve(null)
+      : db.agent.count({ where: agentId ? { id: agentId } : {} }),
+    db.customer.count({ where: agentId ? { assignedAgentId: agentId } : {} }),
     live("ACTIVE"),
     live("PENDING"),
     live("EXPIRED"),
@@ -124,7 +181,9 @@ export async function getSummary(db: Database, scope: AnalyticsScope, range: Dat
     renewedSoldPolicies: liveRenewed,
     cancelledSoldPolicies: countFor("CANCELLED"),
     totalPremium: premium._sum.premium ? toNumber(premium._sum.premium) : 0,
-    premiumCollected: collected._sum.amount ? toNumber(collected._sum.amount) : 0,
+    premiumCollected: collected._sum.amount
+      ? toNumber(collected._sum.amount)
+      : 0,
     totalAgents,
     totalCustomers,
   };
@@ -133,17 +192,23 @@ export async function getSummary(db: Database, scope: AnalyticsScope, range: Dat
 // ─── Sales over time ──────────────────────────────────────────────────────────
 export type SalesInterval = "day" | "week" | "month";
 
-const MAX_PERIODS: Record<SalesInterval, number> = { day: 366, week: 260, month: 120 };
-const DEFAULT_LOOKBACK_DAYS: Record<SalesInterval, number> = { day: 30, week: 84, month: 365 };
+const MAX_PERIODS: Record<SalesInterval, number> = {
+  day: 366,
+  week: 260,
+  month: 120,
+};
+const DEFAULT_LOOKBACK_DAYS: Record<SalesInterval, number> = {
+  day: 30,
+  week: 84,
+  month: 365,
+};
 
 export async function getSalesOverTime(
   db: Database,
   scope: AnalyticsScope,
   options: DateRangeInput & {
     interval: SalesInterval;
-    insuranceType?: InsuranceType | undefined;
-    agentId?: string | undefined;
-  },
+  } & DashboardFilters,
 ) {
   const today = toDateOnly(new Date());
   const to = options.to ?? today;
@@ -160,17 +225,23 @@ export async function getSalesOverTime(
     new Date(Date.parse(`${bounds.toDateExclusive}T00:00:00Z`) - 86_400_000),
   );
 
-  const spanDays = (Date.parse(lastDay) - Date.parse(bounds.fromDate!)) / 86_400_000 + 1;
+  const spanDays =
+    (Date.parse(lastDay) - Date.parse(bounds.fromDate!)) / 86_400_000 + 1;
   const approxPeriods = Math.ceil(
-    spanDays / (options.interval === "day" ? 1 : options.interval === "week" ? 7 : 28),
+    spanDays /
+      (options.interval === "day" ? 1 : options.interval === "week" ? 7 : 28),
   );
   if (approxPeriods > MAX_PERIODS[options.interval] + 5) {
-    throw badRequest(`Date range is too long for interval '${options.interval}'.`);
+    throw badRequest(
+      `Date range is too long for interval '${options.interval}'.`,
+    );
   }
 
   const where = soldPolicyConditions(scope, bounds, options);
   const step = `1 ${options.interval}`;
-  const rows = await db.$queryRaw<{ period: string; policiesSold: number; premium: string }[]>`
+  const rows = await db.$queryRaw<
+    { period: string; policiesSold: number; premium: string }[]
+  >`
     WITH periods AS (
       SELECT generate_series(
         date_trunc(${options.interval}, ${bounds.fromDate}::date::timestamp),
@@ -206,13 +277,28 @@ export async function getSalesOverTime(
   };
 }
 
+/** HEALTH and MOTOR are always listed; LIFE and COMMERCIAL once they have sales. A type filter lists just that line. */
+function visibleLines(
+  rows: { insuranceType: InsuranceType }[],
+  filters: DashboardFilters,
+) {
+  if (filters.insuranceType) return [filters.insuranceType];
+  return (["HEALTH", "MOTOR", "LIFE", "COMMERCIAL"] as const).filter(
+    (line) =>
+      line === "HEALTH" ||
+      line === "MOTOR" ||
+      rows.some((row) => row.insuranceType === line),
+  );
+}
+
 // ─── Distribution ─────────────────────────────────────────────────────────────
 export async function getPolicyDistribution(
   db: Database,
   scope: AnalyticsScope,
   range: DateRangeInput,
+  filters: DashboardFilters = {},
 ) {
-  const where = soldPolicyConditions(scope, toSqlBounds(range));
+  const where = soldPolicyConditions(scope, toSqlBounds(range), filters);
   const rows = await db.$queryRaw<
     { insuranceType: InsuranceType; count: number; premium: string }[]
   >`
@@ -225,10 +311,7 @@ export async function getPolicyDistribution(
     GROUP BY 1`;
   const total = rows.reduce((sum, row) => sum + row.count, 0);
   // HEALTH and MOTOR are always listed; LIFE and COMMERCIAL only once they have sales.
-  const lines = (["HEALTH", "MOTOR", "LIFE", "COMMERCIAL"] as const).filter(
-    (line) =>
-      line === "HEALTH" || line === "MOTOR" || rows.some((row) => row.insuranceType === line),
-  );
+  const lines = visibleLines(rows, filters);
   return lines.map((insuranceType) => {
     const row = rows.find((item) => item.insuranceType === insuranceType);
     const count = row?.count ?? 0;
@@ -250,10 +333,16 @@ export async function getPortfolioSummary(
   db: Database,
   scope: AnalyticsScope,
   range: DateRangeInput,
+  filters: DashboardFilters = {},
 ) {
-  const where = soldPolicyConditions(scope, toSqlBounds(range));
+  const where = soldPolicyConditions(scope, toSqlBounds(range), filters);
   const rows = await db.$queryRaw<
-    { insuranceType: InsuranceType; status: string; count: number; premium: string }[]
+    {
+      insuranceType: InsuranceType;
+      status: string;
+      count: number;
+      premium: string;
+    }[]
   >`
     SELECT p."insuranceType"::text AS "insuranceType",
            CASE
@@ -270,13 +359,11 @@ export async function getPortfolioSummary(
     JOIN policies p ON p.id = sp."policyId"
     WHERE ${where}
     GROUP BY 1, 2`;
-  const lines = (["HEALTH", "MOTOR", "LIFE", "COMMERCIAL"] as const).filter(
-    (line) =>
-      line === "HEALTH" || line === "MOTOR" || rows.some((row) => row.insuranceType === line),
-  );
+  const lines = visibleLines(rows, filters);
   return lines.map((insuranceType) => {
     const own = rows.filter((row) => row.insuranceType === insuranceType);
-    const count = (status: string) => own.find((row) => row.status === status)?.count ?? 0;
+    const count = (status: string) =>
+      own.find((row) => row.status === status)?.count ?? 0;
     return {
       insuranceType,
       total: own.reduce((sum, row) => sum + row.count, 0),
@@ -305,23 +392,42 @@ export async function getAgentPerformance(
     offset?: number;
     sortBy: keyof typeof AGENT_SORT;
     status?: AgentStatus | undefined;
+    /** Show one agent only. */
+    agentId?: string | undefined;
+    insuranceType?: InsuranceType | undefined;
+    saleStatus?: LiveStatus | undefined;
   },
 ) {
   const bounds = toSqlBounds(options);
-  const soldWhere = soldPolicyConditions({ tenantId: scope.tenantId, agentId: null }, bounds);
+  const soldWhere = soldPolicyConditions(
+    { tenantId: scope.tenantId, agentId: null },
+    bounds,
+    {
+      insuranceType: options.insuranceType,
+      status: options.saleStatus,
+    },
+  );
   const receiptConditions: Prisma.Sql[] = [
     Prisma.sql`r."tenantId" = ${scope.tenantId}::uuid`,
     Prisma.sql`r."paymentStatus"::text = 'PAID'`,
   ];
   if (bounds.fromDate) {
-    receiptConditions.push(Prisma.sql`r."issuedAt" >= ${bounds.fromDate}::date::timestamp`);
+    receiptConditions.push(
+      Prisma.sql`r."issuedAt" >= ${bounds.fromDate}::date::timestamp`,
+    );
   }
   if (bounds.toDateExclusive) {
-    receiptConditions.push(Prisma.sql`r."issuedAt" < ${bounds.toDateExclusive}::date::timestamp`);
+    receiptConditions.push(
+      Prisma.sql`r."issuedAt" < ${bounds.toDateExclusive}::date::timestamp`,
+    );
   }
-  const agentConditions: Prisma.Sql[] = [Prisma.sql`a."tenantId" = ${scope.tenantId}::uuid`];
-  if (scope.agentId) agentConditions.push(Prisma.sql`a.id = ${scope.agentId}::uuid`);
-  if (options.status) agentConditions.push(Prisma.sql`a.status::text = ${options.status}`);
+  const agentConditions: Prisma.Sql[] = [
+    Prisma.sql`a."tenantId" = ${scope.tenantId}::uuid`,
+  ];
+  const onlyAgent = scope.agentId ?? options.agentId;
+  if (onlyAgent) agentConditions.push(Prisma.sql`a.id = ${onlyAgent}::uuid`);
+  if (options.status)
+    agentConditions.push(Prisma.sql`a.status::text = ${options.status}`);
   const agentWhere = Prisma.join(agentConditions, " AND ");
 
   const [rows, totals] = await Promise.all([
@@ -391,9 +497,27 @@ export async function getAgentPerformance(
 }
 
 // ─── Recent sales ─────────────────────────────────────────────────────────────
-export async function getRecentSales(db: Database, scope: AnalyticsScope, limit: number) {
+export async function getRecentSales(
+  db: Database,
+  scope: AnalyticsScope,
+  limit: number,
+  range: DateRangeInput = {},
+  filters: DashboardFilters = {},
+) {
+  const issueDate = toDateFilter(range);
+  const agentId = scope.agentId ?? filters.agentId;
+  const today = parseDateOnly(new Date().toISOString());
   const rows = await db.soldPolicy.findMany({
-    where: scope.agentId ? { agentId: scope.agentId } : {},
+    where: {
+      ...(agentId ? { agentId } : {}),
+      ...(issueDate ? { issueDate } : {}),
+      ...(filters.insuranceType
+        ? { policy: { insuranceType: filters.insuranceType } }
+        : {}),
+      ...(filters.status
+        ? { AND: [liveStatusWhere(filters.status, today)] }
+        : {}),
+    },
     include: soldPolicyInclude,
     orderBy: [{ createdAt: "desc" }, { id: "asc" }],
     take: limit,
@@ -424,15 +548,23 @@ export async function getPolicyPerformance(
     Prisma.sql`sp."tenantId" = ${tenantId}::uuid`,
     Prisma.sql`sp."policyStatus"::text <> 'CANCELLED'`,
   ];
-  if (bounds.fromDate) soldConditions.push(Prisma.sql`sp."issueDate" >= ${bounds.fromDate}::date`);
+  if (bounds.fromDate)
+    soldConditions.push(Prisma.sql`sp."issueDate" >= ${bounds.fromDate}::date`);
   if (bounds.toDateExclusive) {
-    soldConditions.push(Prisma.sql`sp."issueDate" < ${bounds.toDateExclusive}::date`);
+    soldConditions.push(
+      Prisma.sql`sp."issueDate" < ${bounds.toDateExclusive}::date`,
+    );
   }
-  const policyConditions: Prisma.Sql[] = [Prisma.sql`p."tenantId" = ${tenantId}::uuid`];
+  const policyConditions: Prisma.Sql[] = [
+    Prisma.sql`p."tenantId" = ${tenantId}::uuid`,
+  ];
   if (options.insuranceType) {
-    policyConditions.push(Prisma.sql`p."insuranceType"::text = ${options.insuranceType}`);
+    policyConditions.push(
+      Prisma.sql`p."insuranceType"::text = ${options.insuranceType}`,
+    );
   }
-  if (options.status) policyConditions.push(Prisma.sql`p.status::text = ${options.status}`);
+  if (options.status)
+    policyConditions.push(Prisma.sql`p.status::text = ${options.status}`);
   const policyWhere = Prisma.join(policyConditions, " AND ");
 
   const [rows, totals] = await Promise.all([
@@ -494,7 +626,9 @@ export async function getSalesBreakdown(
   const issueDate = toDateFilter(options);
   const where: Prisma.SoldPolicyWhereInput = {
     ...(options.agentId ? { agentId: options.agentId } : {}),
-    ...(options.insuranceType ? { policy: { insuranceType: options.insuranceType } } : {}),
+    ...(options.insuranceType
+      ? { policy: { insuranceType: options.insuranceType } }
+      : {}),
     ...(issueDate ? { issueDate } : {}),
   };
   const today = parseDateOnly(new Date().toISOString());
@@ -522,7 +656,10 @@ export async function getSalesBreakdown(
     }),
   ]);
   const byPolicyStatus = [
-    ...liveStatuses.map((status, index) => ({ status, row: byLiveStatus[index]! })),
+    ...liveStatuses.map((status, index) => ({
+      status,
+      row: byLiveStatus[index]!,
+    })),
     { status: "CANCELLED" as const, row: cancelled },
   ].filter(({ row }) => row._count._all > 0);
   return {

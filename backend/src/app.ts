@@ -71,7 +71,7 @@ export async function buildApp(deps: AppDependencies) {
       }
       callback(null, false);
     },
-    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Authorization", "Content-Type", "X-Tenant-Id", REQUEST_ID_HEADER],
     exposedHeaders: [REQUEST_ID_HEADER],
     // Agents authenticate with an HttpOnly session cookie; Super Admins with bearer tokens.

@@ -1,4 +1,4 @@
-import { useRouterState } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { Bell, CheckCircle2, Menu, Shield } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -16,6 +16,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/admin/catalog": "Catalog",
   "/admin/policies": "Policies",
   "/admin/sold-policies": "Sold Policies",
+  "/admin/calendar": "Calendar",
   "/admin/reports": "Reports",
   "/admin/settings": "Settings",
   "/admin/platform-settings": "Platform Settings",
@@ -36,6 +37,8 @@ export function AdminHeader({ onToggleSidebar }: AdminHeaderProps) {
     : me?.role === "SUPER_ADMIN"
       ? "Platform Admin"
       : "Admin";
+  // Agency admins keep their profile under Settings; platform admins under Platform Settings.
+  const profileHref = isTenantAdmin ? "/admin/settings" : "/admin/platform-settings";
   const initials = (me?.tenant?.name ?? me?.email ?? "SA")
     .split(/[\s@.]+/)
     .filter(Boolean)
@@ -111,12 +114,13 @@ export function AdminHeader({ onToggleSidebar }: AdminHeaderProps) {
           </div>
         </PopoverContent>
       </Popover>
-      <div
+      <Link
+        to={profileHref}
+        aria-label="My profile"
         className="ml-1 grid size-8 shrink-0 place-items-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground"
-        aria-hidden="true"
       >
         {initials}
-      </div>
+      </Link>
     </MobileTopBar>
   );
 
@@ -221,7 +225,11 @@ export function AdminHeader({ onToggleSidebar }: AdminHeaderProps) {
           </Popover>
 
           {/* Admin Profile & Avatar */}
-          <div className="flex items-center gap-2 pl-1 border-l border-border/80">
+          <Link
+            to={profileHref}
+            aria-label="My profile"
+            className="flex items-center gap-2 pl-1 border-l border-border/80"
+          >
             <div className="relative">
               <div className="grid size-9 place-items-center rounded-full bg-primary text-primary-foreground font-bold text-xs shadow-xs">
                 {initials}
@@ -234,7 +242,7 @@ export function AdminHeader({ onToggleSidebar }: AdminHeaderProps) {
               </span>
               <span className="text-[11px] font-semibold text-primary">{roleLabel}</span>
             </div>
-          </div>
+          </Link>
         </div>
       </header>
     </>

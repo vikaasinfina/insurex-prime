@@ -5,6 +5,7 @@ import { SidebarToggle } from "@/components/SidebarToggle";
 import { useSidebarCollapsed } from "@/hooks/use-sidebar-collapsed";
 import {
   BarChart3,
+  CalendarDays,
   Building2,
   Layers,
   FileCheck2,
@@ -45,6 +46,7 @@ export function AdminSidebar({ currentPath = "/admin/dashboard", onClose }: Admi
     { label: "Catalog", href: "/admin/catalog", icon: Layers },
     { label: "Policies", href: "/admin/policies", icon: Shield },
     { label: "Sold Policies", href: "/admin/sold-policies", icon: ShoppingBag },
+    { label: "Calendar", href: "/admin/calendar", icon: CalendarDays },
     { label: "Reports", href: "/admin/reports", icon: BarChart3 },
     { label: "Settings", href: "/admin/settings", icon: Settings },
   ];
@@ -71,7 +73,7 @@ export function AdminSidebar({ currentPath = "/admin/dashboard", onClose }: Admi
       );
   const mobileMore = isPlatform
     ? []
-    : toMobile(["Customers", "Policies", "Catalog", "Settings"]);
+    : toMobile(["Calendar", "Customers", "Policies", "Catalog", "Settings"]);
 
   const renderContent = (compact: boolean) => (
     <div className="flex h-full flex-col justify-between overflow-x-hidden bg-background text-foreground border-r border-border/80">

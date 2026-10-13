@@ -8,13 +8,17 @@ import type { CustomerListParams, SoldPolicyListParams } from "@/lib/api";
  */
 export const adminKeys = {
   all: ["admin"] as const,
-  summary: ["admin", "dashboard", "summary"] as const,
-  portfolioSummary: ["admin", "dashboard", "portfolio-summary"] as const,
-  policyDistribution: ["admin", "dashboard", "policy-distribution"] as const,
-  policySales: (interval: string, from: string) =>
-    ["admin", "dashboard", "policy-sales", interval, from] as const,
-  recentSales: (limit: number) => ["admin", "dashboard", "recent-sales", limit] as const,
-  agentPerformance: (limit: number) => ["admin", "dashboard", "agent-performance", limit] as const,
+  summary: (filters: object = {}) => ["admin", "dashboard", "summary", filters] as const,
+  portfolioSummary: (filters: object = {}) =>
+    ["admin", "dashboard", "portfolio-summary", filters] as const,
+  policyDistribution: (filters: object = {}) =>
+    ["admin", "dashboard", "policy-distribution", filters] as const,
+  policySales: (interval: string, filters: object) =>
+    ["admin", "dashboard", "policy-sales", interval, filters] as const,
+  recentSales: (limit: number, filters: object = {}) =>
+    ["admin", "dashboard", "recent-sales", limit, filters] as const,
+  agentPerformance: (limit: number, filters: object = {}) =>
+    ["admin", "dashboard", "agent-performance", limit, filters] as const,
   soldPolicies: (params: SoldPolicyListParams) => ["admin", "sold-policies", params] as const,
   soldPoliciesAll: ["admin", "sold-policies"] as const,
   customers: (params: CustomerListParams) => ["admin", "customers", params] as const,

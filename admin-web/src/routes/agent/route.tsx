@@ -44,6 +44,9 @@ const pageTitles: Record<string, [string, string]> = {
   "/agent/policies": ["Policies", "Active health and motor policies you can offer"],
   "/agent/sell-policy": ["Record Sold Policy", "Log a policy you sold offline"],
   "/agent/sold-policies": ["Sold Policies", "Every policy you have sold"],
+  "/agent/notes": ["Field Notes", "Sticky memos and follow-ups from your customer visits"],
+  "/agent/calendar": ["Calendar", "Your meetings and note follow-ups, with your admin"],
+  "/agent/goals": ["Goals", "Your weekly, monthly and yearly sales targets"],
   "/agent/profile": ["My Profile", "Your agent details and account security"],
 };
 
